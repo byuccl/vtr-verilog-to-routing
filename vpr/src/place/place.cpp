@@ -185,6 +185,8 @@ static const float cross_count[50] = {/* [0..49] */ 1.0, 1.0, 1.0, 1.0828, 1.153
                                       2.5064, 2.5356, 2.5610, 2.5864, 2.6117, 2.6371, 2.6625, 2.6887, 2.7148,
                                       2.7410, 2.7671, 2.7933};
 
+static std::set<ClusterPinId> f_cluster_pins_to_invalidate_timing;
+
 std::unique_ptr<FILE, decltype(&vtr::fclose)> f_move_stats_file(nullptr, vtr::fclose);
 
 #ifdef VTR_ENABLE_DEBUG_LOGGING
@@ -350,10 +352,8 @@ static void get_non_updateable_bb(ClusterNetId net_id, t_bb* bb_coord_new);
 static void update_bb(ClusterNetId net_id, t_bb* bb_coord_new, t_bb* bb_edge_new, int xold, int yold, int xnew, int ynew);
 
 static int find_affected_nets_and_update_costs(e_place_algorithm place_algorithm,
-                                               const t_pl_blocks_to_be_moved& blocks_affected,
                                                const PlaceDelayModel* delay_model,
-                                               const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
-                                               TimingInfo& timing_info,
+                                               t_pl_blocks_to_be_moved& blocks_affected,
                                                double& bb_delta_c,
                                                double& timing_delta_c);
 
@@ -365,11 +365,9 @@ static void update_net_bb(const ClusterNetId net,
                           const ClusterBlockId blk,
                           const ClusterPinId blk_pin);
 static void update_td_delta_costs(const PlaceDelayModel* delay_model,
-                                 const t_pl_blocks_to_be_moved& blocks_affected,
                                  const ClusterNetId net,
                                  const ClusterPinId pin,
-                                 const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
-                                 TimingInfo& timing_info,
+                                 t_pl_blocks_to_be_moved& blocks_affected,
                                  double& delta_timing_cost);
 
 static double get_net_cost(ClusterNetId net_id, t_bb* bb_ptr);
@@ -1330,10 +1328,8 @@ static e_move_result try_swap(float t,
 
         // Find all the nets affected by this swap and update their costs
         int num_nets_affected = find_affected_nets_and_update_costs(place_algorithm,
-                                                                    blocks_affected,
                                                                     delay_model,
-                                                                    netlist_pin_lookup,
-                                                                    timing_info,
+                                                                    blocks_affected,
                                                                     bb_delta_c,
                                                                     timing_delta_c);
         if (place_algorithm == PATH_TIMING_DRIVEN_PLACE) {
@@ -1366,7 +1362,7 @@ static e_move_result try_swap(float t,
             update_move_nets(num_nets_affected);
 
             /* Update clb data structures since we kept the move. */
-            commit_move_blocks(blocks_affected);
+            commit_move_blocks(blocks_affected, netlist_pin_lookup, timing_info);
 
         } else { /* Move was rejected.  */
                  /* Reset the net cost function flags first. */
@@ -1407,10 +1403,8 @@ static e_move_result try_swap(float t,
 //
 //Returns the number of affected nets.
 static int find_affected_nets_and_update_costs(e_place_algorithm place_algorithm,
-                                               const t_pl_blocks_to_be_moved& blocks_affected,
                                                const PlaceDelayModel* delay_model,
-                                               const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
-                                               TimingInfo& timing_info,
+                                               t_pl_blocks_to_be_moved& blocks_affected,
                                                double& bb_delta_c,
                                                double& timing_delta_c) {
     VTR_ASSERT_SAFE(bb_delta_c == 0.);
@@ -1442,7 +1436,7 @@ static int find_affected_nets_and_update_costs(e_place_algorithm place_algorithm
 
             if (place_algorithm == PATH_TIMING_DRIVEN_PLACE) {
                 //Determine the change in timing costs if required
-                update_td_delta_costs(delay_model, blocks_affected, net_id, blk_pin, netlist_pin_lookup, timing_info, timing_delta_c);
+                update_td_delta_costs(delay_model, net_id, blk_pin, blocks_affected, timing_delta_c);
             }
         }
     }
@@ -1504,11 +1498,9 @@ static void update_net_bb(const ClusterNetId net,
 }
 
 static void update_td_delta_costs(const PlaceDelayModel* delay_model,
-                                  const t_pl_blocks_to_be_moved& blocks_affected,
                                   const ClusterNetId net,
                                   const ClusterPinId pin,
-                                  const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
-                                  TimingInfo& timing_info,
+                                  t_pl_blocks_to_be_moved& blocks_affected,
                                   double& delta_timing_cost) {
     auto& cluster_ctx = g_vpr_ctx.clustering();
 
@@ -1522,10 +1514,8 @@ static void update_td_delta_costs(const PlaceDelayModel* delay_model,
             temp_point_to_point_timing_cost[net][ipin] = get_timing_place_crit(net, ipin) * temp_delay;
             delta_timing_cost += temp_point_to_point_timing_cost[net][ipin] - point_to_point_timing_cost[net][ipin];
 
-            //Note that we invalidate the delay of the corresponding edge(s) in the timing graph here (and below).
-            //This is somewhat pessimistic (the move might be rejected and this change will be undone),
-            //however this is gaurenteed to be robust, even if we do per-move STA updates.
-            invalidate_delays(net, ipin, netlist_pin_lookup, timing_info);
+            ClusterPinId sink_pin = cluster_ctx.clb_nlist.net_pin(net, ipin);
+            blocks_affected.affected_pins.push_back(sink_pin);
         }
     } else {
         //This pin is a net sink on a moved block
@@ -1546,7 +1536,7 @@ static void update_td_delta_costs(const PlaceDelayModel* delay_model,
             temp_point_to_point_timing_cost[net][net_pin] = get_timing_place_crit(net, net_pin) * temp_delay;
             delta_timing_cost += temp_point_to_point_timing_cost[net][net_pin] - point_to_point_timing_cost[net][net_pin];
 
-            invalidate_delays(pin, netlist_pin_lookup, timing_info);
+            blocks_affected.affected_pins.push_back(pin);
         }
     }
 }
