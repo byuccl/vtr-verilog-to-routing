@@ -283,6 +283,7 @@ static void alloc_and_load_placement_structs(float place_cost_exp,
 static void alloc_and_load_net_pin_indices();
 
 static void alloc_and_load_try_swap_structs();
+static void free_try_swap_structs();
 
 static void free_placement_structs(const t_placer_opts& placer_opts);
 
@@ -1838,41 +1839,6 @@ static double comp_bb_cost(e_cost_methods method) {
     return cost;
 }
 
-/* Frees the major structures needed by the placer (and not needed       *
- * elsewhere).   */
-static void free_placement_structs(const t_placer_opts& placer_opts) {
-    auto& cluster_ctx = g_vpr_ctx.clustering();
-
-    free_fast_cost_update();
-
-    if (placer_opts.place_algorithm == PATH_TIMING_DRIVEN_PLACE
-        || placer_opts.enable_timing_computations) {
-        for (auto net_id : cluster_ctx.clb_nlist.nets()) {
-            /*add one to the address since it is indexed from 1 not 0 */
-            connection_timing_cost[net_id]++;
-            free(connection_timing_cost[net_id]);
-
-            proposed_connection_timing_cost[net_id]++;
-            free(proposed_connection_timing_cost[net_id]);
-
-            connection_delay[net_id]++;
-            free(connection_delay[net_id]);
-
-            proposed_connection_delay[net_id]++;
-            free(proposed_connection_delay[net_id]);
-        }
-
-        connection_timing_cost.clear();
-        connection_delay.clear();
-        proposed_connection_timing_cost.clear();
-        proposed_connection_delay.clear();
-
-        net_pin_indices.clear();
-    }
-
-    free_placement_macros_structs();
-}
-
 /* Allocates the major structures needed only by the placer, primarily for *
  * computing costs quickly and such.                                       */
 static void alloc_and_load_placement_structs(float place_cost_exp,
@@ -1953,6 +1919,56 @@ static void alloc_and_load_placement_structs(float place_cost_exp,
     place_ctx.pl_macros = alloc_and_load_placement_macros(directs, num_directs);
 }
 
+/* Frees the major structures needed by the placer (and not needed       *
+ * elsewhere).   */
+static void free_placement_structs(const t_placer_opts& placer_opts) {
+    auto& cluster_ctx = g_vpr_ctx.clustering();
+
+    if (placer_opts.place_algorithm == PATH_TIMING_DRIVEN_PLACE
+        || placer_opts.enable_timing_computations) {
+        for (auto net_id : cluster_ctx.clb_nlist.nets()) {
+            /*add one to the address since it is indexed from 1 not 0 */
+            connection_timing_cost[net_id]++;
+            free(connection_timing_cost[net_id]);
+
+            proposed_connection_timing_cost[net_id]++;
+            free(proposed_connection_timing_cost[net_id]);
+
+            connection_delay[net_id]++;
+            free(connection_delay[net_id]);
+
+            prev_connection_timing_cost[net_id]++;
+            free(prev_connection_timing_cost[net_id]);
+
+            proposed_connection_delay[net_id]++;
+            free(proposed_connection_delay[net_id]);
+        }
+
+        connection_timing_cost.clear();
+        connection_delay.clear();
+        proposed_connection_timing_cost.clear();
+        proposed_connection_delay.clear();
+        prev_connection_timing_cost.clear();
+
+    }
+
+    net_cost.clear();
+    proposed_net_cost.clear();
+    bb_coords.clear();
+    bb_num_on_edges.clear();
+
+    bb_updated_before.clear();
+
+    free_fast_cost_update();
+
+    net_pin_indices.clear();
+
+    free_try_swap_structs();
+
+    free_placement_macros_structs();
+}
+
+
 /* Allocates and loads net_pin_indices array, this array allows us to quickly   *
  * find what pin on the net a block pin corresponds to. Returns the pointer   *
  * to the 2D net_pin_indices array.                                             */
@@ -2000,6 +2016,15 @@ static void alloc_and_load_try_swap_structs() {
 
     auto& place_ctx = g_vpr_ctx.mutable_placement();
     place_ctx.compressed_block_grids = create_compressed_block_grids();
+}
+
+static void free_try_swap_structs() {
+    ts_bb_coord_new.clear();
+    ts_bb_edge_new.clear();
+    ts_nets_to_update.clear();
+
+    auto& place_ctx = g_vpr_ctx.mutable_placement();
+    place_ctx.compressed_block_grids.clear();
 }
 
 /* This routine finds the bounding box of each net from scratch (i.e.   *
