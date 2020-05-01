@@ -129,22 +129,20 @@ static vtr::vector<ClusterNetId, char> bb_updated_before;
 /*
  * Net connection delays based on the placement.
  * Index ranges: [0..cluster_ctx.clb_nlist.nets().size()-1][1..num_pins-1]
- *
- * connection_delay: Delays based on commited block positions
- * proposed_connection_delay: Delays of a proposed move (only for net connections effected by move)
  */
-static vtr::vector<ClusterNetId, float*> connection_delay;      //Delays based on commited block positions
-static vtr::vector<ClusterNetId, float*> proposed_connection_delay; //Delays for a proposed move (only for connections effected by move, otherwise INVALID_DELAY)
+static vtr::vector<ClusterNetId, float*> connection_delay;          //Delays based on commited block positions
+static vtr::vector<ClusterNetId, float*> proposed_connection_delay; //Delays for proposed block positions (only
+                                                                    // for connections effected by move, otherwise 
+                                                                    // INVALID_DELAY)
 
 /*
  * Timing cost of various connections (criticality * delay).
  * Index ranges: [0..cluster_ctx.clb_nlist.nets().size()-1][1..num_pins-1]
- *
- * connection_delay: Delays based on commited block positions
- * proposed_connection_delay: Delays of a proposed move (only for net connections effected by move)
  */
-static vtr::vector<ClusterNetId, double*> connection_timing_cost;       //Cost of commited block positions
-static vtr::vector<ClusterNetId, double*> proposed_connection_timing_cost;  //Costs for a proposed (only for connectsion effected by move, otherwise INVALID_DELAY)
+static vtr::vector<ClusterNetId, double*> connection_timing_cost;           //Costs of commited block positions
+static vtr::vector<ClusterNetId, double*> proposed_connection_timing_cost;  //Costs for proposed block positions
+                                                                            // (only for connectsion effected by 
+                                                                            // move, otherwise INVALID_DELAY)
 
 
 /* [0..cluster_ctx.clb_nlist.blocks().size()-1][0..pins_per_clb-1]. Indicates which pin on the net */
