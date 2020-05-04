@@ -110,6 +110,45 @@ constexpr double MAX_INV_TIMING_COST = 1.e9;
  * The exact value of this cost has relatively little impact, but should not be
  * large enough to be on the order of timing costs for normal constraints. */
 
+class PlacerTimingCosts {
+    public:
+        PlacerTimingCosts() = default;
+
+        PlacerTimingCosts(const ClusteredNetlist& nlist) {
+            auto nets = nlist.nets();
+
+            net_start_indicies_.resize(nets.size());
+
+            size_t iconn = 0;
+            for (ClusterNetId net : nets) {
+                if (nlist.net_is_ignored(net)) continue;
+
+                net_start_indicies_[net] = iconn;
+
+                //There is no cost associated with the driver, so only include net sinks
+                iconn += nlist.net_sinks(net).size();
+            }
+            connection_costs_.resize(iconn, std::numeric_limits<double>::quiet_NaN());
+        }
+     
+        double* operator[](ClusterNetId net_id) {
+            double* net_connection_costs = &connection_costs_[net_start_indicies_[net_id]];
+            return net_connection_costs - 1; //Minus one offset so indexing at [1] (i.e. first
+                                            //sink maps to the first element at 
+                                            //connection_costs_[net_start_indicies_[net_id]]
+        }
+
+        void clear() {
+            connection_costs_.clear();
+            net_start_indicies_.clear();
+        }
+
+    private:
+        std::vector<double> connection_costs_;
+        vtr::vector<ClusterNetId,int> net_start_indicies_;
+
+};
+
 /********************** Variables local to place.c ***************************/
 
 /* Cost of a net, and a temporary cost of a net used during move assessment. */
@@ -143,7 +182,7 @@ static vtr::vector<ClusterNetId, float*> proposed_connection_delay; //Delays for
  * Timing cost of connections (i.e. criticality * delay).
  * Index ranges: [0..cluster_ctx.clb_nlist.nets().size()-1][1..num_pins-1]
  */
-static vtr::vector<ClusterNetId, double*> connection_timing_cost;           //Costs of commited block positions
+static PlacerTimingCosts connection_timing_cost;           //Costs of commited block positions
 static vtr::vector<ClusterNetId, double*> proposed_connection_timing_cost;  //Costs for proposed block positions
                                                                             // (only for connectsion effected by 
                                                                             // move, otherwise INVALID_DELAY)
@@ -2074,10 +2113,12 @@ static void alloc_and_load_placement_structs(float place_cost_exp,
         || placer_opts.enable_timing_computations) {
         /* Allocate structures associated with timing driven placement */
         /* [0..cluster_ctx.clb_nlist.nets().size()-1][1..num_pins-1]  */
+
+        connection_timing_cost = PlacerTimingCosts(cluster_ctx.clb_nlist);
+
         connection_delay.resize(num_nets);
         proposed_connection_delay.resize(num_nets);
 
-        connection_timing_cost.resize(num_nets);
         proposed_connection_timing_cost.resize(num_nets);
         net_timing_cost.resize(num_nets, 0.);
 
@@ -2092,9 +2133,6 @@ static void alloc_and_load_placement_structs(float place_cost_exp,
 
             proposed_connection_delay[net_id] = (float*)vtr::malloc(num_sinks * sizeof(float));
             proposed_connection_delay[net_id]--;
-
-            connection_timing_cost[net_id] = (double*)vtr::malloc(num_sinks * sizeof(double));
-            connection_timing_cost[net_id]--;
 
             proposed_connection_timing_cost[net_id] = (double*)vtr::malloc(num_sinks * sizeof(double));
             proposed_connection_timing_cost[net_id]--;
@@ -2138,9 +2176,6 @@ static void free_placement_structs(const t_placer_opts& placer_opts) {
         || placer_opts.enable_timing_computations) {
         for (auto net_id : cluster_ctx.clb_nlist.nets()) {
             /*add one to the address since it is indexed from 1 not 0 */
-            connection_timing_cost[net_id]++;
-            free(connection_timing_cost[net_id]);
-
             proposed_connection_timing_cost[net_id]++;
             free(proposed_connection_timing_cost[net_id]);
 
