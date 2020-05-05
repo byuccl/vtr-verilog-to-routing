@@ -319,7 +319,7 @@ static e_move_result try_swap(float t,
                               t_placer_prev_inverse_costs* prev_inverse_costs,
                               float rlim,
                               MoveGenerator& move_generator,
-                              TimingInfo& timing_info,
+                              TimingInfo* timing_info,
                               const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
                               t_pl_blocks_to_be_moved& blocks_affected,
                               const PlaceDelayModel* delay_model,
@@ -348,8 +348,8 @@ static float starting_t(t_placer_costs* costs,
                         float rlim,
                         const PlaceDelayModel* delay_model,
                         const PlacerCriticalities* criticalities,
+                        TimingInfo* timing_info,
                         MoveGenerator& move_generator,
-                        TimingInfo& timing_info,
                         const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
                         t_pl_blocks_to_be_moved& blocks_affected,
                         const t_placer_opts& placer_opts);
@@ -427,12 +427,12 @@ static void outer_loop_recompute_criticalities(const t_placer_opts& placer_opts,
                                                int* outer_crit_iter_count,
                                                const PlaceDelayModel* delay_model,
                                                PlacerCriticalities* criticalities, 
-                                               SetupTimingInfo& timing_info);
+                                               SetupTimingInfo* timing_info);
 
 static void recompute_criticalities(float crit_exponent,
                                     const PlaceDelayModel* delay_model,
                                     PlacerCriticalities* criticalities,
-                                    SetupTimingInfo& timing_info,
+                                    SetupTimingInfo* timing_info,
                                     t_placer_costs* costs);
 
 static void placement_inner_loop(float t,
@@ -451,7 +451,7 @@ static void placement_inner_loop(float t,
                                  PlacerCriticalities* criticalities,
                                  MoveGenerator& move_generator,
                                  t_pl_blocks_to_be_moved& blocks_affected,
-                                 SetupTimingInfo& timing_info);
+                                 SetupTimingInfo* timing_info);
 
 static void recompute_costs_from_scratch(const t_placer_opts& placer_opts,
                                          const PlaceDelayModel* delay_model,
@@ -596,7 +596,7 @@ void try_place(const t_placer_opts& placer_opts,
         recompute_criticalities(crit_exponent,
                                 place_delay_model.get(),
                                 placer_criticalities.get(),
-                                *timing_info,
+                                timing_info.get(),
                                 &costs);
 
         timing_info->set_warn_unconstrained(false); //Don't warn again about unconstrained nodes again during placement
@@ -723,8 +723,8 @@ void try_place(const t_placer_opts& placer_opts,
                    rlim,
                    place_delay_model.get(),
                    placer_criticalities.get(),
+                   timing_info.get(),
                    *move_generator,
-                   *timing_info,
                    netlist_pin_lookup,
                    blocks_affected,
                    placer_opts);
@@ -757,7 +757,7 @@ void try_place(const t_placer_opts& placer_opts,
                                            &outer_crit_iter_count,
                                            place_delay_model.get(),
                                            placer_criticalities.get(),
-                                           *timing_info);
+                                           timing_info.get());
 
         placement_inner_loop(t, num_temps, rlim, placer_opts,
                              move_lim, crit_exponent, inner_recompute_limit, &stats,
@@ -769,7 +769,7 @@ void try_place(const t_placer_opts& placer_opts,
                              placer_criticalities.get(),
                              *move_generator,
                              blocks_affected,
-                             *timing_info);
+                             timing_info.get());
 
         tot_iter += move_lim;
 
@@ -821,7 +821,7 @@ void try_place(const t_placer_opts& placer_opts,
                                            &outer_crit_iter_count,
                                            place_delay_model.get(),
                                            placer_criticalities.get(),
-                                           *timing_info);
+                                           timing_info.get());
 
         t = 0; /* freeze out */
 
@@ -837,7 +837,7 @@ void try_place(const t_placer_opts& placer_opts,
                              placer_criticalities.get(),
                              *move_generator,
                              blocks_affected,
-                             *timing_info);
+                             timing_info.get());
         oldt = t;
 
         tot_iter += move_lim;
@@ -901,7 +901,7 @@ void try_place(const t_placer_opts& placer_opts,
         recompute_criticalities(crit_exponent,
                                 place_delay_model.get(),
                                 placer_criticalities.get(),
-                                *timing_info,
+                                timing_info.get(),
                                 &costs);
 
         critical_path = timing_info->least_slack_critical_path();
@@ -978,7 +978,7 @@ static void outer_loop_recompute_criticalities(const t_placer_opts& placer_opts,
                                                int* outer_crit_iter_count,
                                                const PlaceDelayModel* delay_model,
                                                PlacerCriticalities* criticalities,
-                                               SetupTimingInfo& timing_info) {
+                                               SetupTimingInfo* timing_info) {
     if (placer_opts.place_algorithm != PATH_TIMING_DRIVEN_PLACE)
         return;
 
@@ -1014,10 +1014,10 @@ static void outer_loop_recompute_criticalities(const t_placer_opts& placer_opts,
 static void recompute_criticalities(float crit_exponent,
                                     const PlaceDelayModel* delay_model,
                                     PlacerCriticalities* criticalities,
-                                    SetupTimingInfo& timing_info,
+                                    SetupTimingInfo* timing_info,
                                     t_placer_costs* costs) {
     //Run STA to update slacks and adjusted/relaxed criticalities
-    timing_info.update();
+    timing_info->update();
 
     //Update placer'criticalities (e.g. sharpen with crit_exponent)
     criticalities->update_criticalities(timing_info, crit_exponent);
@@ -1048,7 +1048,7 @@ static void placement_inner_loop(float t,
                                  PlacerCriticalities* criticalities, 
                                  MoveGenerator& move_generator,
                                  t_pl_blocks_to_be_moved& blocks_affected,
-                                 SetupTimingInfo& timing_info) {
+                                 SetupTimingInfo* timing_info) {
     int inner_crit_iter_count, inner_iter;
 
     int inner_placement_save_count = 0; //How many times have we dumped placement to a file this temperature?
@@ -1269,8 +1269,8 @@ static float starting_t(t_placer_costs* costs,
                         float rlim,
                         const PlaceDelayModel* delay_model,
                         const PlacerCriticalities* criticalities,
+                        TimingInfo* timing_info,
                         MoveGenerator& move_generator,
-                        TimingInfo& timing_info,
                         const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
                         t_pl_blocks_to_be_moved& blocks_affected,
                         const t_placer_opts& placer_opts) {
@@ -1368,7 +1368,7 @@ static e_move_result try_swap(float t,
                               t_placer_prev_inverse_costs* prev_inverse_costs,
                               float rlim,
                               MoveGenerator& move_generator,
-                              TimingInfo& timing_info,
+                              TimingInfo* timing_info,
                               const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
                               t_pl_blocks_to_be_moved& blocks_affected,
                               const PlaceDelayModel* delay_model,
