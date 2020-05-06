@@ -320,7 +320,7 @@ static e_move_result try_swap(float t,
                               float rlim,
                               MoveGenerator& move_generator,
                               TimingInfo* timing_info,
-                              const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
+                              const ClusteredPinTimingEdges* pin_to_tedges,
                               t_pl_blocks_to_be_moved& blocks_affected,
                               const PlaceDelayModel* delay_model,
                               const PlacerCriticalities* criticalities,
@@ -350,7 +350,7 @@ static float starting_t(t_placer_costs* costs,
                         const PlacerCriticalities* criticalities,
                         TimingInfo* timing_info,
                         MoveGenerator& move_generator,
-                        const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
+                        const ClusteredPinTimingEdges* pin_to_tedges,
                         t_pl_blocks_to_be_moved& blocks_affected,
                         const t_placer_opts& placer_opts);
 
@@ -446,7 +446,7 @@ static void placement_inner_loop(float t,
                                  t_placer_costs* costs,
                                  t_placer_prev_inverse_costs* prev_inverse_costs,
                                  int* moves_since_cost_recompute,
-                                 const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
+                                 const ClusteredPinTimingEdges* pin_to_tedges,
                                  const PlaceDelayModel* delay_model,
                                  PlacerCriticalities* criticalities,
                                  MoveGenerator& move_generator,
@@ -524,6 +524,7 @@ void try_place(const t_placer_opts& placer_opts,
     std::unique_ptr<PlaceDelayModel> place_delay_model;
     std::unique_ptr<MoveGenerator> move_generator;
     std::unique_ptr<PlacerCriticalities> placer_criticalities;
+    std::unique_ptr<ClusteredPinTimingEdges> pin_to_tedges;
 
     t_pl_blocks_to_be_moved blocks_affected(cluster_ctx.clb_nlist.blocks().size());
 
@@ -591,6 +592,11 @@ void try_place(const t_placer_opts& placer_opts,
 
         placer_criticalities = std::make_unique<PlacerCriticalities>(cluster_ctx.clb_nlist, netlist_pin_lookup);
 
+        pin_to_tedges = std::make_unique<ClusteredPinTimingEdges>(cluster_ctx.clb_nlist,
+                                                                  netlist_pin_lookup,
+                                                                  atom_ctx.nlist,
+                                                                  atom_ctx.lookup,
+                                                                  *timing_info->timing_graph());
         //Update timing and costs
         recompute_criticalities(crit_exponent,
                                 place_delay_model.get(),
@@ -724,7 +730,7 @@ void try_place(const t_placer_opts& placer_opts,
                    placer_criticalities.get(),
                    timing_info.get(),
                    *move_generator,
-                   netlist_pin_lookup,
+                   pin_to_tedges.get(),
                    blocks_affected,
                    placer_opts);
 
@@ -763,7 +769,7 @@ void try_place(const t_placer_opts& placer_opts,
                              &costs,
                              &prev_inverse_costs,
                              &moves_since_cost_recompute,
-                             netlist_pin_lookup,
+                             pin_to_tedges.get(),
                              place_delay_model.get(),
                              placer_criticalities.get(),
                              *move_generator,
@@ -831,7 +837,7 @@ void try_place(const t_placer_opts& placer_opts,
                              &costs,
                              &prev_inverse_costs,
                              &moves_since_cost_recompute,
-                             netlist_pin_lookup,
+                             pin_to_tedges.get(),
                              place_delay_model.get(),
                              placer_criticalities.get(),
                              *move_generator,
@@ -1030,7 +1036,7 @@ static void placement_inner_loop(float t,
                                  t_placer_costs* costs,
                                  t_placer_prev_inverse_costs* prev_inverse_costs,
                                  int* moves_since_cost_recompute,
-                                 const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
+                                 const ClusteredPinTimingEdges* pin_to_tedges,
                                  const PlaceDelayModel* delay_model,
                                  PlacerCriticalities* criticalities, 
                                  MoveGenerator& move_generator,
@@ -1053,7 +1059,7 @@ static void placement_inner_loop(float t,
         e_move_result swap_result = try_swap(t, costs, prev_inverse_costs, rlim,
                                              move_generator,
                                              timing_info,
-                                             netlist_pin_lookup,
+                                             pin_to_tedges,
                                              blocks_affected,
                                              delay_model,
                                              criticalities,
@@ -1258,7 +1264,7 @@ static float starting_t(t_placer_costs* costs,
                         const PlacerCriticalities* criticalities,
                         TimingInfo* timing_info,
                         MoveGenerator& move_generator,
-                        const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
+                        const ClusteredPinTimingEdges* pin_to_tedges,
                         t_pl_blocks_to_be_moved& blocks_affected,
                         const t_placer_opts& placer_opts) {
     /* Finds the starting temperature (hot condition).              */
@@ -1283,7 +1289,7 @@ static float starting_t(t_placer_costs* costs,
         e_move_result swap_result = try_swap(HUGE_POSITIVE_FLOAT, costs, prev_inverse_costs, rlim,
                                              move_generator,
                                              timing_info,
-                                             netlist_pin_lookup,
+                                             pin_to_tedges,
                                              blocks_affected,
                                              delay_model,
                                              criticalities,
@@ -1356,7 +1362,7 @@ static e_move_result try_swap(float t,
                               float rlim,
                               MoveGenerator& move_generator,
                               TimingInfo* timing_info,
-                              const ClusteredPinAtomPinsLookup& netlist_pin_lookup,
+                              const ClusteredPinTimingEdges* pin_to_tedges,
                               t_pl_blocks_to_be_moved& blocks_affected,
                               const PlaceDelayModel* delay_model,
                               const PlacerCriticalities* criticalities,
@@ -1459,7 +1465,7 @@ static e_move_result try_swap(float t,
             update_move_nets(num_nets_affected);
 
             /* Update clb data structures since we kept the move. */
-            commit_move_blocks(blocks_affected, netlist_pin_lookup, timing_info);
+            commit_move_blocks(blocks_affected, pin_to_tedges, timing_info);
 
         } else { /* Move was rejected.  */
                  /* Reset the net cost function flags first. */
