@@ -93,8 +93,7 @@ _GENERATE_CONFIG="off"
 _FORCE_SIM="off"
 _DRY_RUN="off"
 _RANDOM_DRY_RUN="off"
-_REGENERATE_EXPECTATION="off"
-_GENERATE_EXPECTATION="off"
+_REGENERATE_QOR="off"
 
 function help() {
 
@@ -116,8 +115,7 @@ printf "Called program with $INPUT
 		--override						$(_prt_cur_arg ${_OVERRIDE_CONFIG}) if a config file is passed in, override arguments rather than append
 		--dry_run                       $(_prt_cur_arg ${_DRY_RUN}) performs a dry run to check the validity of the task and flow 
 		--randomize                     $(_prt_cur_arg ${_RANDOM_DRY_RUN}) performs a dry run randomly to check the validity of the task and flow 
-		--regenerate_expectation        $(_prt_cur_arg ${_REGENERATE_EXPECTATION}) regenerate the expectation and overrides the expected value mismatches only
-		--generate_expectation          $(_prt_cur_arg ${_GENERATE_EXPECTATION}) generate the expectation and overrides the expectation file
+		--regenerate_qor                $(_prt_cur_arg ${_REGENERATE_QOR}) regenerate the qor and overrides the qor
 	OPTIONS
 		-h|--help                       $(_prt_cur_arg off) print this
 		-j|--nb_of_process < N >        $(_prt_cur_arg ${_NUMBER_OF_PROCESS}) Number of process requested to be used
@@ -367,13 +365,9 @@ function parse_args() {
 					_RANDOM_DRY_RUN="on"
 					echo "random dry run"
 
-				;;--regenerate_expectation)
-					_REGENERATE_EXPECTATION="on"
-					echo "regenerating expected values for changes outside the defined ranges"
-
-				;;--generate_expectation)
-					_GENERATE_EXPECTATION="on"
-					echo "generating new expected values"
+				;;--regenerate_qor)
+					_REGENERATE_QOR="on"
+					echo "regenerating QoR"
 
 				;;*) 
 					PARSE_SUBTEST="on"
@@ -805,7 +799,7 @@ function sim() {
 			
 		# synthesis
 		synthesis_failure_name="synthesis_failures"
-		synthesis_parse_result_file_name="synthesis_result.json"
+		synthesis_parse_result_file_name="synthesis_result.csv"
 		synthesis_params_file_name="synthesis_params"
 		synthesis_wrapper_file_name="synthesis_wrapper_params"
 		synthesis_log_file_name="synthesis.log"
@@ -817,7 +811,7 @@ function sim() {
 
 		# simulation
 		simulation_failure_name="simulation_failures"
-		simulation_parse_result_file_name="simulation_result.json"
+		simulation_parse_result_file_name="simulation_result.csv"
 		simulation_params_file_name="simulation_params"
 		simulation_wrapper_generate_io_file_name="simulation_wrapper_generate_io_params"
 		simulation_wrapper_generate_output_file_name="simulation_wrapper_generate_output_params"
@@ -1040,14 +1034,7 @@ function sim() {
 							2> "${synthesis_result_failure_log_file}"
 				fi
 
-				if [ "_${_GENERATE_EXPECTATION}" == "_on" ]
-				then
-					if [ -f "${NEW_RUN_DIR}/${bench_name}/${synthesis_parse_result_file_name}" ];
-					then
-						cat "${NEW_RUN_DIR}/${bench_name}/${synthesis_parse_result_file_name}" \
-							> "${synthesis_golden_result_file}"
-					fi
-				elif [ "_${_REGENERATE_EXPECTATION}" == "_on" ]
+				if [ "_${_REGENERATE_QOR}" == "_on" ]
 				then
 					if [ -f "${NEW_RUN_DIR}/${bench_name}/${synthesis_parse_result_file_name}.diff" ];
 					then
@@ -1075,26 +1062,24 @@ function sim() {
 			# display logs if verbosity is on
 			if [ "_${_verbose_failures}" == "_on" ]
 			then
-				if [ "_${synthesis_failure_log_file}" != "_" ] \
+				if [ "_${synthesis_result_failure_log_file}" != "_" ] \
+				&& [ -f "${synthesis_result_failure_log_file}" ]
+				then
+					for test_failed in $(sort "${synthesis_failure_log_file}" "${synthesis_result_failure_log_file}" | uniq -d)
+					do
+						printf "\n\n\n ==== LOG %s ====\n\n" "${test_failed}"
+						cat "${NEW_RUN_DIR}/${test_failed}/synthesis.log"
+					done
+					printf "\n\n"
+				elif [ "_${synthesis_failure_log_file}" != "_" ] \
 				&& [ -f "${synthesis_failure_log_file}" ]
 				then
-					if [ "_${synthesis_result_failure_log_file}" != "_" ] \
-					&& [ -f "${synthesis_result_failure_log_file}" ]
-					then
-						for test_failed in $(sort "${synthesis_failure_log_file}" "${synthesis_result_failure_log_file}" | uniq -d)
-						do
-							printf "\n\n\n ==== LOG %s ====\n\n" "${test_failed}"
-							cat "${NEW_RUN_DIR}/${test_failed}/synthesis.log"
-						done
-						printf "\n\n"
-					else
-						for test_failed in $(sort "${synthesis_failure_log_file}" | uniq)
-						do
-							printf "\n\n\n ==== LOG %s ====\n\n" "${test_failed}"
-							cat "${NEW_RUN_DIR}/${test_failed}/synthesis.log"
-						done
-						printf "\n\n"
-					fi
+					for test_failed in $(sort "${synthesis_failure_log_file}" | uniq)
+					do
+						printf "\n\n\n ==== LOG %s ====\n\n" "${test_failed}"
+						cat "${NEW_RUN_DIR}/${test_failed}/synthesis.log"
+					done
+					printf "\n\n"
 				fi
 			fi
 		fi
@@ -1109,7 +1094,7 @@ function sim() {
 		simulation_bench_list=( "${TMP_BENCH_FIND_ARRAY[@]}" )
 
 		sim_total="$(( ${#simulation_gio_bench_list[@]} + ${#simulation_go_bench_list[@]} + ${#simulation_bench_list[@]} ))"
-		if (( sim_total > 0 )) \
+		if (( ${sim_total} > 0 )) \
 		&& [ "${_simulation}" == "on" ]
 		then
 			run_cmd_file_in_parallel \
@@ -1154,14 +1139,7 @@ function sim() {
 							2> "${simulation_result_failure_log_file}"
 				fi
 
-				if [ "_${_GENERATE_EXPECTATION}" == "_on" ]
-				then
-					if [ -f "${NEW_RUN_DIR}/${bench_name}/${simulation_parse_result_file_name}" ];
-					then
-						cat "${NEW_RUN_DIR}/${bench_name}/${simulation_parse_result_file_name}" \
-							> "${simulation_golden_result_file}"
-					fi
-				elif [ "_${_REGENERATE_EXPECTATION}" == "_on" ]
+				if [ "_${_REGENERATE_QOR}" == "_on" ]
 				then
 					if [ -f "${NEW_RUN_DIR}/${bench_name}/diff_${simulation_parse_result_file_name}" ];
 					then
@@ -1189,26 +1167,24 @@ function sim() {
 			# display logs if verbosity is on
 			if [ "_${_verbose_failures}" == "_on" ]
 			then
-				if [ "_${simulation_failure_log_file}" != "_" ] \
+				if [ "_${simulation_result_failure_log_file}" != "_" ] \
+				&& [ -f "${simulation_result_failure_log_file}" ]
+				then
+					for test_failed in $(sort "${simulation_result_failure_log_file}" | uniq)
+					do
+						printf "\n\n\n ==== LOG %s ====\n\n" "${test_failed}"
+						cat "${NEW_RUN_DIR}/${test_failed}/simulation.log"
+					done
+					printf "\n\n"
+				elif [ "_${simulation_failure_log_file}" != "_" ] \
 				&& [ -f "${simulation_failure_log_file}" ]
 				then
-					if [ "_${simulation_result_failure_log_file}" != "_" ] \
-					&& [ -f "${simulation_result_failure_log_file}" ]
-					then
-						for test_failed in $(sort "${simulation_failure_log_file}" "${simulation_result_failure_log_file}" | uniq -d)
-						do
-							printf "\n\n\n ==== LOG %s ====\n\n" "${test_failed}"
-							cat "${NEW_RUN_DIR}/${test_failed}/simulation.log"
-						done
-						printf "\n\n"
-					else
-						for test_failed in $(sort "${simulation_failure_log_file}" | uniq)
-						do
-							printf "\n\n\n ==== LOG %s ====\n\n" "${test_failed}"
-							cat "${NEW_RUN_DIR}/${test_failed}/simulation.log"
-						done
-						printf "\n\n"
-					fi
+					for test_failed in $(sort "${simulation_failure_log_file}" | uniq)
+					do
+						printf "\n\n\n ==== LOG %s ====\n\n" "${test_failed}"
+						cat "${NEW_RUN_DIR}/${test_failed}/simulation.log"
+					done
+					printf "\n\n"
 				fi
 			fi
 		fi

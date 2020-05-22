@@ -6,7 +6,8 @@ Developer Guide
 .. toctree::
     :glob:
 
-    contributing/index
+    building
+    contributing
     developing
     tutorials/index
     support

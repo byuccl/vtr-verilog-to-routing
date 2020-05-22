@@ -152,6 +152,7 @@ const char* ids_STR[] = {
     "CASE_DEFAULT",
     "ALWAYS",
     "IF",
+    "IF_Q",
     "FOR",
     "WHILE",
     /* Delay Control */
@@ -159,7 +160,6 @@ const char* ids_STR[] = {
     "POSEDGE",
     "NEGEDGE",
     /* expressions */
-    "TERNARY_OPERATION",
     "BINARY_OPERATION",
     "UNARY_OPERATION",
     /* basic primitives */
@@ -170,10 +170,6 @@ const char* ids_STR[] = {
     /* basic identifiers */
     "IDENTIFIERS",
     "NUMBERS",
-    /* C functions */
-    "C_ARG_LIST",
-    "DISPLAY",
-    "FINISH",
     /* Hard Blocks */
     "HARD_BLOCK",
     "HARD_BLOCK_NAMED_INSTANCE",

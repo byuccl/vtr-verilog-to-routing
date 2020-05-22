@@ -672,11 +672,10 @@ RouteStatus vpr_route_flow(t_vpr_setup& vpr_setup, const t_arch& arch) {
     } else { //Do or load
         int chan_width = router_opts.fixed_channel_width;
 
-        auto& cluster_ctx = g_vpr_ctx.clustering();
-
-        ClbNetPinsMatrix<float> net_delay = make_net_pins_matrix<float>(cluster_ctx.clb_nlist);
-
         //Initialize the delay calculator
+        vtr::t_chunk net_delay_ch;
+        vtr::vector<ClusterNetId, float*> net_delay = alloc_net_delay(&net_delay_ch);
+
         std::shared_ptr<SetupHoldTimingInfo> timing_info = nullptr;
         std::shared_ptr<RoutingDelayCalculator> routing_delay_calc = nullptr;
         if (vpr_setup.Timing.timing_analysis_enabled) {
@@ -742,6 +741,7 @@ RouteStatus vpr_route_flow(t_vpr_setup& vpr_setup, const t_arch& arch) {
 
         //Update interactive graphics
         update_screen(ScreenUpdatePriority::MAJOR, graphics_msg.c_str(), ROUTING, timing_info);
+        free_net_delay(net_delay, &net_delay_ch);
     }
 
     return route_status;
@@ -752,7 +752,7 @@ RouteStatus vpr_route_fixed_W(t_vpr_setup& vpr_setup,
                               int fixed_channel_width,
                               std::shared_ptr<SetupHoldTimingInfo> timing_info,
                               std::shared_ptr<RoutingDelayCalculator> delay_calc,
-                              ClbNetPinsMatrix<float>& net_delay) {
+                              vtr::vector<ClusterNetId, float*>& net_delay) {
     if (router_needs_lookahead(vpr_setup.RouterOpts.router_algorithm)) {
         // Prime lookahead cache to avoid adding lookahead computation cost to
         // the routing timer.
@@ -788,7 +788,7 @@ RouteStatus vpr_route_min_W(t_vpr_setup& vpr_setup,
                             const t_arch& arch,
                             std::shared_ptr<SetupHoldTimingInfo> timing_info,
                             std::shared_ptr<RoutingDelayCalculator> delay_calc,
-                            ClbNetPinsMatrix<float>& net_delay) {
+                            vtr::vector<ClusterNetId, float*>& net_delay) {
     // Note that lookahead cache is not primed here because
     // binary_search_place_and_route will change the channel width, and result
     // in the lookahead cache being recomputed.
@@ -817,7 +817,7 @@ RouteStatus vpr_load_routing(t_vpr_setup& vpr_setup,
                              const t_arch& /*arch*/,
                              int fixed_channel_width,
                              std::shared_ptr<SetupHoldTimingInfo> timing_info,
-                             ClbNetPinsMatrix<float>& net_delay) {
+                             vtr::vector<ClusterNetId, float*>& net_delay) {
     vtr::ScopedStartFinishTimer timer("Load Routing");
     if (NO_FIXED_CHANNEL_WIDTH == fixed_channel_width) {
         VPR_FATAL_ERROR(VPR_ERROR_ROUTE, "Fixed channel width must be specified when loading routing (was %d)", fixed_channel_width);
@@ -1188,10 +1188,11 @@ void vpr_analysis(t_vpr_setup& vpr_setup, const t_arch& Arch, const RouteStatus&
                   vpr_setup.RoutingArch.wire_to_rr_ipin_switch);
 
     if (vpr_setup.TimingEnabled) {
-        //Load the net delays
-        auto& cluster_ctx = g_vpr_ctx.clustering();
+        vtr::vector<ClusterNetId, float*> net_delay;
+        vtr::t_chunk net_delay_ch;
 
-        ClbNetPinsMatrix<float> net_delay = make_net_pins_matrix<float>(cluster_ctx.clb_nlist);
+        //Load the net delays
+        net_delay = alloc_net_delay(&net_delay_ch);
         load_net_delay_from_routing(net_delay);
 
         //Do final timing analysis
@@ -1221,6 +1222,9 @@ void vpr_analysis(t_vpr_setup& vpr_setup, const t_arch& Arch, const RouteStatus&
         if (vpr_setup.PowerOpts.do_power) {
             vpr_power_estimation(vpr_setup, Arch, *timing_info, route_status);
         }
+
+        //Clean-up the net delays
+        free_net_delay(net_delay, &net_delay_ch);
     }
 }
 
@@ -1296,59 +1300,59 @@ void vpr_power_estimation(const t_vpr_setup& vpr_setup,
 
 void vpr_print_error(const VprError& vpr_error) {
     /* Determine the type of VPR error, To-do: can use some enum-to-string mechanism */
-    const char* error_type = nullptr;
+    char* error_type = nullptr;
     try {
         switch (vpr_error.type()) {
             case VPR_ERROR_UNKNOWN:
-                error_type = "Unknown";
+                error_type = vtr::strdup("Unknown");
                 break;
             case VPR_ERROR_ARCH:
-                error_type = "Architecture file";
+                error_type = vtr::strdup("Architecture file");
                 break;
             case VPR_ERROR_PACK:
-                error_type = "Packing";
+                error_type = vtr::strdup("Packing");
                 break;
             case VPR_ERROR_PLACE:
-                error_type = "Placement";
+                error_type = vtr::strdup("Placement");
                 break;
             case VPR_ERROR_ROUTE:
-                error_type = "Routing";
+                error_type = vtr::strdup("Routing");
                 break;
             case VPR_ERROR_TIMING:
-                error_type = "Timing";
+                error_type = vtr::strdup("Timing");
                 break;
             case VPR_ERROR_SDC:
-                error_type = "SDC file";
+                error_type = vtr::strdup("SDC file");
                 break;
             case VPR_ERROR_NET_F:
-                error_type = "Netlist file";
+                error_type = vtr::strdup("Netlist file");
                 break;
             case VPR_ERROR_BLIF_F:
-                error_type = "Blif file";
+                error_type = vtr::strdup("Blif file");
                 break;
             case VPR_ERROR_PLACE_F:
-                error_type = "Placement file";
+                error_type = vtr::strdup("Placement file");
                 break;
             case VPR_ERROR_IMPL_NETLIST_WRITER:
-                error_type = "Implementation Netlist Writer";
+                error_type = vtr::strdup("Implementation Netlist Writer");
                 break;
             case VPR_ERROR_ATOM_NETLIST:
-                error_type = "Atom Netlist";
+                error_type = vtr::strdup("Atom Netlist");
                 break;
             case VPR_ERROR_POWER:
-                error_type = "Power";
+                error_type = vtr::strdup("Power");
                 break;
             case VPR_ERROR_ANALYSIS:
-                error_type = "Analysis";
+                error_type = vtr::strdup("Analysis");
                 break;
             case VPR_ERROR_OTHER:
-                error_type = "Other";
+                error_type = vtr::strdup("Other");
                 break;
             case VPR_ERROR_INTERRUPTED:
-                error_type = "Interrupted";
+                error_type = vtr::strdup("Interrupted");
                 break;
             default:
-                error_type = "Unrecognized Error";
+                error_type = vtr::strdup("Unrecognized Error");
                 break;
         }
     } catch (const vtr::VtrError& e) {
