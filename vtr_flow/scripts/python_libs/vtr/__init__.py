@@ -5,5 +5,5 @@ from .vpr import run,run_relax_W,cmp_full_vs_incr_STA
 from .odin import run
 from .ace import run
 from .error import *
-from .flow import run, VTR_STAGE, parse_vtr_flow
+from .flow import run, VTR_STAGE
 from .task import load_task_config, TaskConfig, find_task_config_file
