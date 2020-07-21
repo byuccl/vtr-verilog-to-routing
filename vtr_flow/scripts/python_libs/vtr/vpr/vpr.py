@@ -3,8 +3,8 @@ from pathlib import Path
 from vtr import  mkdir_p, find_vtr_file, CommandRunner, print_verbose, relax_W, determine_lut_size, determine_min_W, verify_file
 from vtr.error import InspectError
 
-def run_relax_W(architecture, circuit_name, circuit, command_runner=CommandRunner(), temp_dir=".", 
-                    relax_W_factor=1.3, vpr_exec=None, verbosity=1, logfile_base="vpr",
+def run_relax_W(architecture, circuit, circuit_name=None, command_runner=CommandRunner(), temp_dir=".", 
+                    relax_W_factor=1.3, vpr_exec=None, logfile_base="vpr",
                     vpr_args=None, output_netlist=None):
     """
     Runs VPR twice:
@@ -13,31 +13,41 @@ def run_relax_W(architecture, circuit_name, circuit, command_runner=CommandRunne
 
       2nd: At relaxed channel width (e.g. for critical path delay)
     
-    To run:
-        vtr.vpr.run_relax_W(args)
+    .. note :: Usage: vtr.vpr.run_relax_W(<architecture_file>,<circuit_name>,<circuit_file>,[OPTIONS])
 
-    Required arguments:
-        architecture: Architecture file
+    Arguments
+    =========
+        architecture: 
+            Architecture file
         
-        circuit_name: Curcuit netlist 
+        circuit: 
+            Input circuit netlist
+
+    Other Parameters
+    ----------------
+        circuit_name: 
+            Name of the circuit file
+
+        command_runner: 
+            CommandRunner object
         
-        circuit: Input circuit netlist
-    Options:
-        command_runner: CommandRunner object
+        temp_dir: 
+            Directory to run in
         
-        temp_dir: Directory to run in
+        relax_W_factor: 
+            Factor by which to relax minimum channel width for critical path delay routing
         
-        relax_W_factor: Factor by which to relax minimum channel width for critical path delay routing
+        vpr_exec: 
+            Path to the VPR executable
         
-        vpr_exec: Path to the VPR executable
+        logfile_base: 
+            Base name for log files (e.g. "vpr" produces vpr.min_W.out, vpr.relaxed_W.out)
         
-        verbosity: How much progress output to produce
+        vpr_args: 
+            Extra arguments for VPR
         
-        logfile_base: Base name for log files (e.g. "vpr" produces vpr.min_W.out, vpr.relaxed_W.out)
-        
-        vpr_args: Extra arguments for VPR
-        
-        output_netlist: Output implementation netlist to generate
+        output_netlist: 
+            Output implementation netlist to generate
     """
     if vpr_args is None:
         vpr_args = OrderedDict()
@@ -46,7 +56,6 @@ def run_relax_W(architecture, circuit_name, circuit, command_runner=CommandRunne
 
     #Verify that files are Paths or convert them to Paths and check that they exist
     architecture = verify_file(architecture, "Architecture")
-    circuit_name = verify_file(circuit_name, "Circuit")
     circuit = verify_file(circuit, "Circuit")
 
     vpr_min_W_log = '.'.join([logfile_base, "out"])
@@ -69,7 +78,7 @@ def run_relax_W(architecture, circuit_name, circuit, command_runner=CommandRunne
     if vpr_exec == None:
         vpr_exec = find_vtr_file('vpr', is_executable=True)
 
-    run(architecture, circuit_name, circuit, command_runner, temp_dir, log_filename=vpr_min_W_log, vpr_exec=vpr_exec, vpr_args=vpr_args)
+    run(architecture, circuit, circuit_name, command_runner, temp_dir, log_filename=vpr_min_W_log, vpr_exec=vpr_exec, vpr_args=vpr_args)
 
     if ('pack' in vpr_args or 'place' in vpr_args) and 'route' not in vpr_args:
         #Don't look for min W if routing was not run
@@ -86,38 +95,49 @@ def run_relax_W(architecture, circuit_name, circuit, command_runner=CommandRunne
     #VPR does not support performing routing when fixed pins 
     # are specified, and placement is not run; so remove the option
 
-    run(architecture, circuit_name, circuit, command_runner, temp_dir, log_filename=vpr_relaxed_W_log, vpr_exec=vpr_exec, vpr_args=vpr_args, check_for_second_run=False)
+    run(architecture, circuit, circuit_name, command_runner, temp_dir, log_filename=vpr_relaxed_W_log, vpr_exec=vpr_exec, vpr_args=vpr_args, check_for_second_run=False)
     
 
-def run(architecture, circuit_name, circuit, command_runner=CommandRunner(), temp_dir=".", output_netlist=None,
+def run(architecture, circuit, circuit_name=None, command_runner=CommandRunner(), temp_dir=".", output_netlist=None,
  log_filename="vpr.out", vpr_exec=None, vpr_args=None,check_for_second_run=True,rr_graph_ext=".xml",):
     """
     Runs VPR with the specified configuration
 
-    To run:
-        vtr.vpr.run(args)
+    .. note :: Usage: vtr.vpr.run(<architecture>,<circuit_name>,<circuit>,[OPTIONS])
 
-    Required arguments:
-        architecture: Architecture file
+    Arguments
+    =========
+        architecture: 
+            Architecture file
         
-        circuit_name: Curcuit netlist 
-        
-        circuit: Input circuit file
+        circuit:
+            Input circuit file
     
-    Options:
-        command_runner: CommandRunner object
-        
-        temp_dir: Directory to run in
+    Other Parameters
+    ----------------
+        circuit_name: 
+            Name of the circuit file
 
-        output_netlist: Output implementation netlist to generate
+        command_runner: 
+            CommandRunner object
         
-        log_filename : File to log result to
+        temp_dir:
+            Directory to run in
+
+        output_netlist: 
+            Output implementation netlist to generate
         
-        vpr_exec: Path to the VPR executable
+        log_filename : 
+            File to log result to
         
-        vpr_args: Extra arguments for VPR
+        vpr_exec: 
+            Path to the VPR executable
         
-        check_for_second_run: enables checking for arguments in vpr_args that require a second run of VPR ie analysis
+        vpr_args: 
+            Extra arguments for VPR
+        
+        check_for_second_run: 
+            enables checking for arguments in vpr_args that require a second run of VPR ie analysis
 
     """
     
@@ -131,11 +151,12 @@ def run(architecture, circuit_name, circuit, command_runner=CommandRunner(), tem
 
     #Verify that files are Paths or convert them to Paths and check that they exist
     architecture = verify_file(architecture, "Architecture")
-    circuit_name = verify_file(circuit_name, "Circuit")
     circuit = verify_file(circuit, "Circuit")
-
-    cmd = [vpr_exec, architecture.name, circuit_name.stem, "--circuit_file", circuit.name]
-
+    cmd = []
+    if circuit_name:
+        cmd = [vpr_exec, architecture.name, circuit_name, "--circuit_file", circuit.name]
+    else:
+        cmd =  [vpr_exec, architecture.name, circuit.name]
     #Enable netlist generation
     #if output_netlist:
         #vpr_args['gen_postsynthesis_netlist'] = output_netlist
@@ -182,8 +203,11 @@ def run(architecture, circuit_name, circuit, command_runner=CommandRunner(), tem
             second_run_args["write_rr_graph"] = rr_graph_out_file2
 
         second_run_log_file = "vpr_second_run.out"
-        cmd = [vpr_exec, architecture.name, circuit_name.stem, "--circuit_file", circuit.name]
-
+        cmd = []
+        if circuit_name:
+            cmd = [vpr_exec, architecture.name, circuit_name, "--circuit_file", circuit.name]
+        else:
+            cmd =  [vpr_exec, architecture.name, circuit.name]
         for arg, value in vpr_args.items():
             if value == True:
                 cmd += ["--" + arg]
@@ -200,40 +224,48 @@ def run(architecture, circuit_name, circuit, command_runner=CommandRunner(), tem
             if diff_result:
                 raise InspectError("failed: vpr (RR Graph XML output not consistent when reloaded)")
 
-def cmp_full_vs_incr_STA(architecture,circuit_name,circuit,command_runner=CommandRunner(),vpr_args=None,rr_graph_ext=".xml",temp_dir=".",vpr_exec=None):
-    """"
+def cmp_full_vs_incr_STA(architecture,circuit,circuit_name=None,command_runner=CommandRunner(),vpr_args=None,rr_graph_ext=".xml",temp_dir=".",vpr_exec=None):
+    """
     Sanity check that full STA and the incremental STA produce the same *.net, *.place, *.route files as well as identical timing report files
 
-    To run:
-        vtr.vpr.cmp_full_vs_incr_STA(args)
+    .. note :: Usage: vtr.vpr.cmp_full_vs_incr_STA(<architecture>,<circuit_name>,<circuit>,[OPTIONS])
 
-    Required arguments:
-        architecture: Architecture file
+    Arguments
+    =========
+        architecture: 
+            Architecture file
         
-        circuit_name: Curcuit netlist 
-        
-        circuit: Input circuit file
+        circuit: 
+            Input circuit file
     
-    Options:
-        command_runner: CommandRunner object
+    Other Parameters
+    ----------------
+        circuit_name: 
+            Name of the circuit file
+
+        command_runner: 
+            CommandRunner object
         
-        temp_dir: Directory to run in
+        temp_dir: 
+            Directory to run in
         
-        vpr_exec: Path to the VPR executable
+        vpr_exec: 
+            Path to the VPR executable
         
-        vpr_args: Extra arguments for VPR
+        vpr_args: 
+            Extra arguments for VPR
         
     """
 
     #Verify that files are Paths or convert them to Paths and check that they exist
     architecture = verify_file(architecture, "Architecture")
-    circuit_name = verify_file(circuit_name, "Circuit")
     circuit = verify_file(circuit, "Circuit")
-
+    if not circuit_name:
+        circuit_name = circuit.stem
     default_output_filenames = [
-            "{}.net".format(circuit_name.stem),
-            "{}.place".format(circuit_name.stem),
-            "{}.route".format(circuit_name.stem),
+            "{}.net".format(circuit_name),
+            "{}.place".format(circuit_name),
+            "{}.route".format(circuit_name),
             "report_timing.setup.rpt",
 			"report_timing.hold.rpt",
 			"report_unconstrained_timing.setup.rpt",
@@ -252,7 +284,7 @@ def cmp_full_vs_incr_STA(architecture,circuit_name,circuit,command_runner=Comman
     incremental_vpr_args["timing_update_type"]="incremental"
     fixed_W_log_file = "vpr.incr_sta.out"
 
-    run(architecture, circuit_name, circuit, command_runner, temp_dir, log_filename=fixed_W_log_file, vpr_exec=vpr_exec, vpr_args=incremental_vpr_args, check_for_second_run=False)
+    run(architecture, circuit, circuit_name, command_runner, temp_dir, log_filename=fixed_W_log_file, vpr_exec=vpr_exec, vpr_args=incremental_vpr_args, check_for_second_run=False)
 
     # Rename the incremental STA output files
     for filename in default_output_filenames:
