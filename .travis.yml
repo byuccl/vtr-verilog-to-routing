@@ -90,6 +90,10 @@ jobs:
       script:
         - ./dev/check-format.sh
     - stage: Test
+      name: "Python Lint"
+      script:
+        - python3 ./dev/pylint_check.py
+    - stage: Test
       name: "C++ Unit Tests"
       env:
         - CMAKE_PARAMS="-DVTR_ASSERT_LEVEL=3 -DWITH_BLIFEXPLORER=on"
@@ -226,10 +230,14 @@ jobs:
         - ./.github/travis/cron_build.sh
 
 before_script:
-  # Switch to python 3.6.3
+  # Switch to python 3.6.3, install pip and python requirements
   - pyenv install -f 3.6.3
   - pyenv global 3.6.3
-
+  - curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+  - python3 get-pip.py   
+  - rm get-pip.py
+  - python3 -m pip install -r dev/requirements.txt
+    
   - source .github/travis/common.sh
   - ./.github/travis/setup.sh
     
