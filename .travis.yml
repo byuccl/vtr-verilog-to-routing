@@ -233,6 +233,7 @@ before_script:
   - source .github/travis/common.sh
   - ./.github/travis/setup.sh
   - which python3
+  - python --version
   - python3 --version
   - pyenv install -f 3.6.3
   - which python3
@@ -240,6 +241,7 @@ before_script:
   - pyenv global 3.6.3
   - which python
   - which python3
+  - python --version
   - python3 --version
 
 after_script:
