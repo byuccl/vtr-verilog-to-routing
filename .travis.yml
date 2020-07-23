@@ -232,6 +232,8 @@ jobs:
 before_script:
   - source .github/travis/common.sh
   - ./.github/travis/setup.sh
+  - which python3
+  - python --version
 
 after_script:
   - ./.github/travis/setup.sh
