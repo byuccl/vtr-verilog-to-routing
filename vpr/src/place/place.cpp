@@ -671,7 +671,7 @@ void try_place(const t_placer_opts& placer_opts,
 
     if (placer_opts.effort_scaling == e_place_effort_scaling::CIRCUIT) {
         //This scales the move limit proportional to num_blocks ^ (4/3)
-        move_lim = (int)(annealing_sched.inner_num * pow(cluster_ctx.clb_nlist.blocks().size(), 1.3333));
+        move_lim = 1;
     } else if (placer_opts.effort_scaling == e_place_effort_scaling::DEVICE_CIRCUIT) {
         //This scales the move limit proportional to device_size ^ (2/3) * num_blocks ^ (2/3)
         //
