@@ -16,7 +16,6 @@ from collections import OrderedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / 'python_libs'))
 import vtr
-from vtr import mkdir_p
 
 def main():
     parse_vtr_flow(sys.argv[1:],prog = sys.argv[0])
@@ -50,7 +49,7 @@ def parse_vtr_flow(arg_list, prog=None):
         else:
             metrics[parse_pattern.name()] = ""
         print(parse_pattern.name(),end="\t")
-    print("\n")
+    print("")
 
     for key,value in extra_params_parsed.items():
         print(value,end="\t")
@@ -74,6 +73,8 @@ def parse_vtr_flow(arg_list, prog=None):
             metrics[parse_pattern.name()] = "-1"
             with open(filepath) as f:
                 for line in f:
+                    if line[0] == "#":
+                        line = line[1:]
                     match = parse_pattern.regex().match(line)
                     if match and len(match.groups()):
                         #Extract the first group value
@@ -81,11 +82,12 @@ def parse_vtr_flow(arg_list, prog=None):
             print(metrics[parse_pattern.name()],end="\t")
         else:
             #No matching file, skip
+            print("-1",end="\t")
             assert num_files == 0
-
+    print("")
     metrics_filepath = str(Path(parse_path)  / "parse_results.txt")
 
-    vtr.write_tab_delimitted_csv(metrics_filepath, [metrics])
+    #vtr.write_tab_delimitted_csv(metrics_filepath, [metrics])
 
     return metrics
 
