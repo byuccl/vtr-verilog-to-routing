@@ -124,7 +124,7 @@ class RangeAbsPassRequirement(PassRequirement):
 
         self._min_value = min_value
         self._max_value = max_value
-        slef._abs_threshold
+        self._abs_threshold = abs_threshold
 
     def type(self):
         return "Range"
@@ -271,8 +271,8 @@ def load_parse_results(parse_results_filepath, primary_key_set=None):
 
     parse_results = ParseResults()
 
-    with open(parse_results_filepath) as f:
-        for lineno, row in enumerate(f):
+    with open(parse_results_filepath) as file:
+        for lineno, row in enumerate(file):
             elements = [elem.strip() for elem in row.split("\t")]
 
             if lineno == 0:
@@ -299,7 +299,8 @@ def load_parse_results(parse_results_filepath, primary_key_set=None):
 
                     result[metric] = elem
 
-                assert arch and circuit
+                if not (arch and circuit):
+                    print(parse_results_filepath)
                 
                 parse_results.add_result(arch, circuit, result)
 

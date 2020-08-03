@@ -566,7 +566,7 @@ def get_latest_run_number(base_dir):
         # No existing run directories
         return None
 
-    while run_dir.exists:
+    while run_dir.exists():
         run_number += 1
         run_dir = Path(base_dir) / run_dir_name(run_number)
 

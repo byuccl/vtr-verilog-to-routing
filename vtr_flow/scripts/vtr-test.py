@@ -13,7 +13,7 @@ from multiprocessing import Pool
 sys.path.insert(0, str(Path(__file__).resolve().parent / 'python_libs'))
 
 import vtr
-from vtr import error, load_list_file, find_vtr_file, mkdir_p, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, VERBOSITY_CHOICES, load_task_config, TaskConfig, find_task_config_file, CommandRunner
+from vtr import error, load_list_file, find_vtr_file, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, VERBOSITY_CHOICES, load_task_config, TaskConfig, find_task_config_file, CommandRunner
 
 BASIC_VERBOSITY=1
 
@@ -166,7 +166,7 @@ def run_odin_test(args, test_name):
 
 def run_tasks(args, task_lists):
     #Call 'vtr task'
-    vtr_task_cmd = ['vtr', 'task'] 
+    vtr_task_cmd = [find_vtr_file('vtr-task.py')] 
     vtr_task_cmd += ['-l'] + task_lists
     vtr_task_cmd += ['-j', str(args.j),
                      '-v', str(max(0, args.verbosity - 1)),
@@ -180,7 +180,7 @@ def run_tasks(args, task_lists):
 
 def check_tasks_qor(args, task_lists):
     num_qor_failures = 0
-    vtr_task_cmd = ['vtr', 'task'] 
+    vtr_task_cmd = [find_vtr_file('vtr-task.py')] 
     vtr_task_cmd += ['-l'] + task_lists
     vtr_task_cmd += ['-v', str(max(0, args.verbosity - 1)),
                      '--check_golden',

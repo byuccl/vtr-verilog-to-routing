@@ -1,19 +1,29 @@
 #!/usr/bin/env python3
+"""
+Module to parse the vtr flow results.
+"""
 import sys
 from pathlib import Path
 import glob
 
 from collections import OrderedDict
-
+#pylint: disable=wrong-import-position, import-error
 sys.path.insert(0, str(Path(__file__).resolve().parent / "python_libs"))
 import vtr
+#pylint: enable=wrong-import-position, import-error
 
 
 def main():
-    parse_vtr_flow(sys.argv[1:], prog=sys.argv[0])
+    """
+    main for parse_vtr_flow.py
+    """
+    parse_vtr_flow(sys.argv[1:])
 
 
-def parse_vtr_flow(arg_list, prog=None):
+def parse_vtr_flow(arg_list):
+    """
+        parse vtr flow output
+    """
     parse_path = arg_list[0]
     parse_config_file = arg_list[1]
 
@@ -36,11 +46,11 @@ def parse_vtr_flow(arg_list, prog=None):
 
     # Set defaults
     for parse_pattern in parse_patterns.values():
-
-        if parse_pattern.default_value() != None:
-            metrics[parse_pattern.name()] = parse_pattern.default_value()
-        else:
-            metrics[parse_pattern.name()] = ""
+        metrics[parse_pattern.name()] = (
+            parse_pattern.default_value()
+            if parse_pattern.default_value() is not None
+            else ""
+        )
         print(parse_pattern.name(), end="\t")
     print("")
 
@@ -59,23 +69,23 @@ def parse_vtr_flow(arg_list, prog=None):
         if num_files > 1:
             raise vtr.InspectError(
                 "File pattern '{}' is ambiguous ({} files matched)".format(
-                    parse_pattern.filename()
+                    parse_pattern.filename(), num_files
                 ),
                 num_files,
                 filepaths,
             )
 
-        elif num_files == 1:
+        if num_files == 1:
             filepath = filepaths[0]
 
             assert Path(filepath).exists
             metrics[parse_pattern.name()] = "-1"
-            with open(filepath) as f:
-                for line in f:
+            with open(filepath) as file:
+                for line in file:
                     if line[0] == "#":
                         line = line[1:]
                     match = parse_pattern.regex().match(line)
-                    if match and len(match.groups()):
+                    if match and match.groups():
                         # Extract the first group value
                         metrics[parse_pattern.name()] = match.groups()[0]
             print(metrics[parse_pattern.name()], end="\t")
@@ -84,11 +94,11 @@ def parse_vtr_flow(arg_list, prog=None):
             print("-1", end="\t")
             assert num_files == 0
     print("")
-    metrics_filepath = str(Path(parse_path) / "parse_results.txt")
+    #metrics_filepath = str(Path(parse_path) / "parse_results.txt")
 
     # vtr.write_tab_delimitted_csv(metrics_filepath, [metrics])
 
-    return metrics
+    return 0
 
 
 if __name__ == "__main__":

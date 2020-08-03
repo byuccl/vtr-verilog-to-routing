@@ -1,3 +1,6 @@
+"""
+Module that contains the task functions
+"""
 from pathlib import Path
 from pathlib import PurePath
 
@@ -20,6 +23,7 @@ class TaskConfig:
             parse_file,
             script_path=None,
             script_params=None,
+            script_params_common=None,
             pass_requirements_file=None,
             sdc_dir=None,
             qor_parse_file=None,
@@ -35,6 +39,7 @@ class TaskConfig:
         self.parse_file = parse_file
         self.script_path = script_path
         self.script_params = script_params
+        self.script_params_common=script_params_common
         self.pass_requirements_file = pass_requirements_file
         self.sdc_dir = sdc_dir
         self.qor_parse_file = qor_parse_file
@@ -43,6 +48,9 @@ class TaskConfig:
 
 
 def load_task_config(config_file):
+    """
+    Load task config information
+    """
     # Load the file stripping comments
     values = load_list_file(config_file)
 
@@ -54,6 +62,7 @@ def load_task_config(config_file):
             "parse_file",
             "script_path",
             "script_params",
+            "script_params_common",
             "pass_requirements_file",
             "sdc_dir",
             "qor_parse_file",
@@ -125,10 +134,10 @@ def load_task_config(config_file):
 
 
 def find_task_config_file(task_name):
-    #
-    # See if we can find the config.txt assuming the task name is an
-    # absolute/relative path
-    #
+    """
+    See if we can find the config.txt assuming the task name is an
+    absolute/relative path
+    """
 
     base_dirs = []
     if PurePath(task_name).is_absolute():

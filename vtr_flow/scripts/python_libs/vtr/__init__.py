@@ -19,7 +19,7 @@ from .util import (
     get_latest_run_dir,
     verify_file,
 )
-from .inspect import determine_lut_size, determine_min_w, determine_memory_addr_width, load_parse_patterns
+from .inspect import determine_lut_size, determine_min_w, determine_memory_addr_width, load_parse_patterns, load_pass_requirements, load_parse_results
 #pylint: disable=reimported
 from .abc import run, run_lec
 from .vpr import run, run_relax_w, cmp_full_vs_incr_sta, run_second_time
