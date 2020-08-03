@@ -105,7 +105,7 @@ class RangePassRequirement(PassRequirement):
             if golden_value == check_value:
                 return True, "golden and check both equal 0"
             else:
-                return False, "unable to normalize relative value (golden value is zero)".format(norm_check_value, min_value(), max_value())
+                return False, "unable to normalize relative value (golden value is zero)"
 
         else:
             norm_check_value = check_value / golden_value
@@ -113,7 +113,7 @@ class RangePassRequirement(PassRequirement):
             if self.min_value() <= norm_check_value <= self.max_value():
                 return True, "relative value within range"
             else:
-                return False, "relative value {} outside of range [{},{}]".format(norm_check_value, min_value(), max_value())
+                return False, "relative value {} outside of range [{},{}]".format(norm_check_value, self.min_value(), self.max_value())
 class RangeAbsPassRequirement(PassRequirement):
 
     def __init__(self, metric, min_value=None, max_value=None,abs_threshold=None):

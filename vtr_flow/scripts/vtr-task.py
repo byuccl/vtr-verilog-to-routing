@@ -396,7 +396,7 @@ def create_jobs(args, configs):
             
             parse_cmd = None
             if config.parse_file:
-                parse_path = Path(find_latest_run_dir(args, config)) / work_dir
+                parse_path = Path(get_next_run_dir(find_task_dir(args,config))) / work_dir
                 parse_path = (parse_path / "common" if (parse_path / "common").exists() else str(parse_path))
                 parse_cmd = [parse_file, parse_path, resolve_vtr_source_file(config, config.parse_file, str(PurePath("parse").joinpath("parse_config")))]
                 

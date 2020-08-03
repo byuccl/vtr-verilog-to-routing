@@ -548,7 +548,7 @@ def get_next_run_number(base_dir):
     latest_run_number = get_latest_run_number(base_dir)
 
     if latest_run_number is None:
-        next_run_number = 0
+        next_run_number = 1
     else:
         next_run_number = latest_run_number + 1
 
@@ -559,10 +559,10 @@ def get_latest_run_number(base_dir):
     """
     Returns the highest run number of all run directories with in base_dir
     """
-    run_number = 0
+    run_number = 1
     run_dir = Path(base_dir) / run_dir_name(run_number)
 
-    if not run_dir.exists:
+    if not run_dir.exists():
         # No existing run directories
         return None
 
