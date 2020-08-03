@@ -117,7 +117,7 @@ class RangePassRequirement(PassRequirement):
 class RangeAbsPassRequirement(PassRequirement):
 
     def __init__(self, metric, min_value=None, max_value=None,abs_threshold=None):
-        super(RangeAbsPassRequirement, self).__init__(metric)
+        super().__init__(metric)
 
         if max_value < min_value:
             raise InspectError("Invalid range specification (max value larger than min value)")
@@ -163,7 +163,7 @@ class RangeAbsPassRequirement(PassRequirement):
             if golden_value == check_value:
                 return True, "golden and check both equal 0"
             else:
-                return False, "unable to normalize relative value (golden value is zero)".format(norm_check_value, min_value(), max_value())
+                return False, "unable to normalize relative value (golden value is zero)"
 
         else:
             norm_check_value = check_value / golden_value
@@ -171,7 +171,7 @@ class RangeAbsPassRequirement(PassRequirement):
             if (self.min_value() <= norm_check_value <= self.max_value()) or abs(norm_check_value) < self.abs_threshold():
                 return True, "relative value within range"
             else:
-                return False, "relative value {} outside of range [{},{}] and above absolute threshold".format(norm_check_value, min_value(), max_value(),abs_threshold())
+                return False, "relative value {} outside of range [{},{}] and above absolute threshold {}".format(norm_check_value, self.min_value(), self.max_value(),self.abs_threshold())
 
 class ParseResults:
     def __init__(self):

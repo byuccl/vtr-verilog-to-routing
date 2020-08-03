@@ -363,6 +363,7 @@ def check_golden_results_for_task(args, config):
 
 def create_jobs(args, configs):
     jobs = []
+    parse_file = find_vtr_file('parse_vtr_flow.py', is_executable=True)
     for config in configs:
         for arch, circuit in itertools.product(config.archs, config.circuits):
             abs_arch_filepath = resolve_vtr_source_file(config, arch, config.arch_dir)
@@ -395,7 +396,9 @@ def create_jobs(args, configs):
             
             parse_cmd = None
             if config.parse_file:
-                parse_cmd = [find_vtr_file('parse_vtr_flow.py', is_executable=True), str(Path(find_latest_run_dir(args, config)) /work_dir), resolve_vtr_source_file(config, config.parse_file, str(PurePath("parse").joinpath("parse_config")))]
+                parse_path = Path(find_latest_run_dir(args, config)) / work_dir
+                parse_path = (parse_path / "common" if (parse_path / "common").exists() else str(parse_path))
+                parse_cmd = [parse_file, parse_path, resolve_vtr_source_file(config, config.parse_file, str(PurePath("parse").joinpath("parse_config")))]
                 
 
             #We specify less verbosity to the sub-script
@@ -658,7 +661,7 @@ def parse_task(args, config, config_jobs, task_metrics_filepath=None, flow_metri
                     assert len(lines) == 2
                     if header:
                         #First line is the header
-                        print(lines[0],file=out_f)
+                        print(lines[0],file=out_f, end="")
                         header = False
                     #Second line is the data
                     print("{:<{arch_width}}\t{:<{circuit_width}}\t{}".format(job.arch(), job.circuit(), lines[1], arch_width=max_arch_len, circuit_width=max_circuit_len), file = out_f, end="")

@@ -117,6 +117,22 @@ jobs:
       script:
         - ./.github/travis/build.sh
     - stage: Test
+      name: "Basic Regression Tests PY"
+      env:
+        - CMAKE_PARAMS="-DVTR_ASSERT_LEVEL=3 -DWITH_BLIFEXPLORER=on"
+        - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
+      script:
+        - ./.github/travis/build.sh
+        - travis_wait 30 ./vtr_flow/scripts/vtr-test.py vtr_basic -j2
+    - stage: Test
+      name: "Strong Regression Tests PY"
+      env:
+        - CMAKE_PARAMS="-DVTR_ASSERT_LEVEL=3 -DWITH_BLIFEXPLORER=on"
+        - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
+      script:
+        - ./.github/travis/build.sh
+        - travis_wait 30 ./vtr_flow/scripts/vtr-test.py vtr_strong -j2
+    - stage: Test
       name: "Basic Regression Tests"
       env:
         - CMAKE_PARAMS="-DVTR_ASSERT_LEVEL=3 -DWITH_BLIFEXPLORER=on"
