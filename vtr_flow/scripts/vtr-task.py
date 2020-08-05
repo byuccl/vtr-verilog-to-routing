@@ -10,10 +10,12 @@ import time
 import shutil
 from datetime import datetime
 from multiprocessing import Pool
+from contextlib import redirect_stdout
+from run_vtr_flow import vtr_command_main as run_vtr_flow
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / 'python_libs'))
 
-from vtr import load_list_file, find_vtr_file, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, VERBOSITY_CHOICES, argparse_str2bool, get_next_run_dir, get_latest_run_dir, load_task_config, TaskConfig, find_task_config_file, CommandRunner, load_pass_requirements, load_parse_results
+from vtr import load_list_file, find_vtr_file, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, VERBOSITY_CHOICES, argparse_str2bool, get_next_run_dir, get_latest_run_dir, load_task_config, TaskConfig, find_task_config_file, CommandRunner, load_pass_requirements, load_parse_results, parse_vtr_flow
 from vtr.error import VtrError, InspectError, CommandError
 
 BASIC_VERBOSITY = 1
@@ -363,50 +365,33 @@ def check_golden_results_for_task(args, config):
 
 def create_jobs(args, configs):
     jobs = []
-    parse_file = find_vtr_file('parse_vtr_flow.py', is_executable=True)
     for config in configs:
         for arch, circuit in itertools.product(config.archs, config.circuits):
             abs_arch_filepath = resolve_vtr_source_file(config, arch, config.arch_dir)
-            abs_circuit_filepath = resolve_vtr_source_file(config, circuit, config.circuit_dir)
-
-            run_executable = None
-            if config.script_path:
-                #Custom flow script
-                run_executable = [config.script_path]
-            else:
-                #Default flow script
-                run_executable = [find_vtr_file('run_vtr_flow.py', is_executable=True)]
-            
-
+            abs_circuit_filepath = resolve_vtr_source_file(config, circuit, config.circuit_dir)  
+            work_dir = str(PurePath(arch).joinpath(circuit))         
+            run_dir = str(Path(get_next_run_dir(find_task_dir(args,config))) / work_dir)
             #Collect any extra script params from the config file
-            script_params = [abs_circuit_filepath, abs_arch_filepath]
-            script_params += ["-temp_dir", "."]
-            script_params += config.script_params if config.script_params else []
-            script_params += config.script_params_common.split(" ") if config.script_params_common else []
-            
+            cmd = [abs_circuit_filepath, abs_arch_filepath]
+            cmd += ["-temp_dir", run_dir]
+            cmd += config.script_params if config.script_params else []
+            cmd += config.script_params_common.split(" ") if config.script_params_common else []
 
             #Apply any special config based parameters
             if config.cmos_tech_behavior:
-                script_params += ["--power", resolve_vtr_source_file(config, config.cmos_tech_behavior, "tech")]
+                cmd += ["--power", resolve_vtr_source_file(config, config.cmos_tech_behavior, "tech")]
 
             if config.pad_file:
-                script_params += ["--fix_pins", resolve_vtr_source_file(config, config.pad_file)]
-            
-            work_dir = str(PurePath(arch).joinpath(circuit))
+                cmd += ["--fix_pins", resolve_vtr_source_file(config, config.pad_file)]
             
             parse_cmd = None
             if config.parse_file:
-                parse_path = Path(get_next_run_dir(find_task_dir(args,config))) / work_dir
-                parse_path = (parse_path / "common" if (parse_path / "common").exists() else str(parse_path))
-                parse_cmd = [parse_file, parse_path, resolve_vtr_source_file(config, config.parse_file, str(PurePath("parse").joinpath("parse_config")))]
+                parse_cmd = [run_dir, resolve_vtr_source_file(config, config.parse_file, str(PurePath("parse").joinpath("parse_config")))]
                 
-
             #We specify less verbosity to the sub-script
             # This keeps the amount of output reasonable
             if max(0, args.verbosity - 1):
-                script_params += ["-verbose"]
-
-            cmd = run_executable + script_params
+                cmd += ["-verbose"]
 
             jobs.append(Job(config.task_name, arch, circuit, work_dir, cmd, parse_cmd))
 
@@ -473,23 +458,16 @@ def run_parallel(args, configs, queued_jobs):
                 work_dir = job.work_dir(run_dirs[job.task_name()])
                 Path(work_dir).mkdir(parents=True, exist_ok=True)
                 log_filepath = str(PurePath(work_dir) / "vtr_flow.log")
-
+                proc = None
                 with open(log_filepath, 'w+') as log_file:
                     #print "Starting {}: {}".format(job.task_name(), job.job_name())
                     #print job.command()
-                    proc = subprocess.Popen(job.run_command(), 
-                                            cwd=work_dir, 
-                                            stderr=subprocess.STDOUT, 
-                                            stdout=log_file)
+                    proc = run_vtr_flow(job.run_command(), find_vtr_file("run_vtr_flow.py"))
                 if job.parse_command():
                     parse_filepath = str(PurePath(work_dir) / "parse_results.txt")
                     with open(parse_filepath, 'w+') as parse_file:
-                        parse_proc = subprocess.Popen(job.parse_command(), 
-                                            cwd=work_dir, 
-                                            stderr=subprocess.STDOUT, 
-                                            stdout=parse_file)
-                        if parse_proc.poll():
-                            proc = parse_proc
+                        with redirect_stdout(parse_file):
+                            parse_vtr_flow(job.parse_command())
                 running_procs.append((proc, job, log_file))
             while len(running_procs) > 0:
                 #Are any of the workers finished?
@@ -497,7 +475,7 @@ def run_parallel(args, configs, queued_jobs):
                 for i in range(len(running_procs)):
                     proc, job, log_file = running_procs[i]
 
-                    status = proc.poll()
+                    status = proc
                     if status is not None:
                         #Process has completed
                         if status == 0:
@@ -622,18 +600,7 @@ def parse_task(args, config, config_jobs, task_metrics_filepath=None, flow_metri
     run_dir = find_latest_run_dir(args, config)
 
     print_verbose(BASIC_VERBOSITY, args.verbosity, "Parsing task run {}".format(run_dir))
-
-    for job in config_jobs:
-        #Re-run parsing only
-        #cmd += ['-v', str(max(0, args.verbosity-3))]
-        
-        with open(Path(job.work_dir(run_dir)) /  flow_metrics_basename) as parse_file:
-            print("PARSE:{}".format(Path(job.work_dir(run_dir)) /  flow_metrics_basename))
-            subprocess.Popen(job.parse_command(), 
-                            cwd=run_dir, 
-                            stderr=subprocess.STDOUT, 
-                            stdout=parse_file)
-
+    
     if task_metrics_filepath is None:
         task_metrics_filepath = task_parse_results_filepath = str(PurePath(run_dir).joinpath("parse_results.txt"))
 
@@ -655,7 +622,7 @@ def parse_task(args, config, config_jobs, task_metrics_filepath=None, flow_metri
             #The job results file is basically the same format, but excludes the architecture and circuit fields,
             #which we prefix to each line of the task result file
             job_parse_results_filepath = Path(job.work_dir(run_dir)) /  flow_metrics_basename
-            if job_parse_results_filepath.exists:
+            if job_parse_results_filepath.exists():
                 with open(job_parse_results_filepath) as in_f:
                     lines = in_f.readlines()
                     assert len(lines) == 2

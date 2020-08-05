@@ -5,12 +5,10 @@ Module to parse the vtr flow results.
 import sys
 from pathlib import Path
 import glob
+import vtr
 
 from collections import OrderedDict
-#pylint: disable=wrong-import-position, import-error
-sys.path.insert(0, str(Path(__file__).resolve().parent / "python_libs"))
-import vtr
-#pylint: enable=wrong-import-position, import-error
+
 
 
 def main():
@@ -80,7 +78,7 @@ def parse_vtr_flow(arg_list):
 
             assert Path(filepath).exists
             metrics[parse_pattern.name()] = "-1"
-            with open(filepath) as file:
+            with open(filepath,"r") as file:
                 for line in file:
                     if line[0] == "#":
                         line = line[1:]

@@ -295,7 +295,7 @@ sub parse_single_task {
 sub parse_single_flow_run {
     my ($run_dir, $config_values, $parse_file, $output_file_path) = @_;
 
-    my $cmd = join(" ", "$vtr_flow_path/scripts/parse_vtr_flow.py", $run_dir, $parse_file, $config_values, "> $output_file_path");
+    my $cmd = join(" ", "$vtr_flow_path/scripts/parse_vtr_flow.pl", $run_dir, $parse_file, $config_values, "> $output_file_path");
 
     my $ret = system($cmd);
     if ($ret != 0) {

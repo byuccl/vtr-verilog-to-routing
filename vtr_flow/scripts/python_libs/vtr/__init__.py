@@ -28,4 +28,5 @@ from .ace import run
 from .error import *
 from .flow import run, VtrStage
 from .task import load_task_config, TaskConfig, find_task_config_file
+from .parse_vtr_flow import parse_vtr_flow
 #pylint: enable=reimported

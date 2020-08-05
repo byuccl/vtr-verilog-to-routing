@@ -473,8 +473,9 @@ def vtr_command_main(arg_list, prog=None):
                 % (seconds.total_seconds(), str(Path.cwd()), socket.gethostname())
             )
             file.write("\n")
-
-    sys.exit(return_status)
+    if __name__ == "__main__":
+        sys.exit(return_status)
+    return return_status
 
 
 def process_unknown_args(unknown_args):
