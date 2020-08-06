@@ -90,6 +90,7 @@ class RangePassRequirement(PassRequirement):
         assert golden_value != None
         assert check_value != None
 
+        old_golden_value = str(golden_value)
         try:
             golden_value = float(golden_value)
         except ValueError as e:
@@ -107,7 +108,11 @@ class RangePassRequirement(PassRequirement):
             else:
                 return False, "unable to normalize relative value (golden value is zero)"
 
+        elif check_value == old_golden_value:
+                        return True, "Check value equal to golden value"
+        
         else:
+            
             norm_check_value = check_value / golden_value
 
             if self.min_value() <= norm_check_value <= self.max_value():
