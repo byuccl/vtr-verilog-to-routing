@@ -385,7 +385,7 @@ def create_jobs(args, configs):
             cmd += ["-temp_dir", run_dir]
             if args.show_failures:
                 cmd += ["-show_failures"]
-            cmd += ["-name","{}:\t\t\t{}".format(config.task_name,work_dir)]
+            cmd += ["-name","{}:\t\t\t{}".format(config.task_name.split("_", 1)[1],work_dir)]
             cmd += config.script_params if config.script_params else []
             cmd += config.script_params_common if config.script_params_common else []
             if config.script_params_list_add:
