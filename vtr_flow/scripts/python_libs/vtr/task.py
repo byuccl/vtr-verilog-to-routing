@@ -21,9 +21,11 @@ class TaskConfig:
             circuit_list_add,
             arch_list_add,
             parse_file,
+            second_parse_file = None,
             script_path=None,
             script_params=None,
             script_params_common=None,
+            script_params_list_add=None,
             pass_requirements_file=None,
             sdc_dir=None,
             qor_parse_file=None,
@@ -37,9 +39,11 @@ class TaskConfig:
         self.circuits = circuit_list_add
         self.archs = arch_list_add
         self.parse_file = parse_file
+        self.second_parse_file = second_parse_file
         self.script_path = script_path
         self.script_params = script_params
         self.script_params_common=script_params_common
+        self.script_params_list_add=script_params_list_add
         self.pass_requirements_file = pass_requirements_file
         self.sdc_dir = sdc_dir
         self.qor_parse_file = qor_parse_file
@@ -72,7 +76,7 @@ def load_task_config(config_file):
     )
 
     # Keys that are repeated to create lists
-    repeated_keys = set(["circuit_list_add", "arch_list_add"])
+    repeated_keys = set(["circuit_list_add", "arch_list_add", "script_params_list_add"])
 
     # Keys that are required
     required_keys = set(
@@ -91,6 +95,8 @@ def load_task_config(config_file):
         if key in unique_keys:
             if key not in key_values:
                 key_values[key] = value
+            elif key == "parse_file":
+                key_values["second_parse_file"] = value
             else:
                 raise VtrError(
                     "Duplicate {key} in config file {file}".format(
@@ -101,7 +107,10 @@ def load_task_config(config_file):
         elif key in repeated_keys:
             if key not in key_values:
                 key_values[key] = []
-            key_values[key].append(value)
+            if key == "script_params_list_add":
+                key_values[key] += value.split(" ")
+            else:
+                key_values[key].append(value)
 
         else:
             # All valid keys should have been collected by now
@@ -114,6 +123,9 @@ def load_task_config(config_file):
     # We split the script params into a list
     if "script_params" in key_values:
         key_values["script_params"] = key_values["script_params"].split(" ")
+
+    if "script_params_common" in key_values:
+        key_values["script_params_common"] = key_values["script_params_common"].split(" ")
 
     # Check that all required fields were specified
     for required_key in required_keys:

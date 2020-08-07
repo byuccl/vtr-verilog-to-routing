@@ -24,12 +24,13 @@ ALL_LOG_VERBOSITY = 4
 
 class Job:
 
-    def __init__(self, task_name, arch, circuit, work_dir, run_command, parse_command):
+    def __init__(self, task_name, arch, circuit, work_dir, run_command, parse_command, second_parse_command):
         self._task_name = task_name
         self._arch = arch
         self._circuit = circuit
         self._run_command = run_command
         self._parse_command = parse_command
+        self._second_parse_command = second_parse_command
         self._work_dir = work_dir
 
     def task_name(self):
@@ -50,6 +51,9 @@ class Job:
     def parse_command(self):
         return self._parse_command
 
+    def second_parse_command(self):
+        return self._second_parse_command
+        
     def work_dir(self, run_dir):
         return str(PurePath(run_dir).joinpath(self._work_dir))
 
@@ -124,6 +128,11 @@ def vtr_command_argparser(prog=None):
                         choices=['local'],
                         default='local',
                         help="What system to run the tasks on.")
+
+    parser.add_argument("-show_failures",
+                        default=False,
+                        action="store_true",
+                        help="Produce additional debug output")
 
     parser.add_argument('-j',
                         default=1,
@@ -324,7 +333,7 @@ def check_golden_results_for_task(args, config):
         #Ensure that task has all the golden cases
         for arch, circuit in golden_primary_keys:
             if task_results.metrics(arch, circuit) == None:
-                raise InspectError("Required case {}/{} missing from task results: {}".format(arch, circuit, parse_results_filepath))
+                raise InspectError("Required case {}/{} missing from task results: {}".format(arch, circuit, task_results_filepath))
     
         #Warn about any elements in task that are not found in golden
         for arch, circuit in task_primary_keys:
@@ -374,26 +383,33 @@ def create_jobs(args, configs):
             #Collect any extra script params from the config file
             cmd = [abs_circuit_filepath, abs_arch_filepath]
             cmd += ["-temp_dir", run_dir]
+            if args.show_failures:
+                cmd += ["-show_failures"]
+            cmd += ["-name","{}:\t\t\t{}".format(config.task_name,work_dir)]
             cmd += config.script_params if config.script_params else []
-            cmd += config.script_params_common.split(" ") if config.script_params_common else []
-
+            cmd += config.script_params_common if config.script_params_common else []
+            if config.script_params_list_add:
+                for value in config.script_params_list_add:
+                    cmd.append(value)
             #Apply any special config based parameters
             if config.cmos_tech_behavior:
                 cmd += ["--power", resolve_vtr_source_file(config, config.cmos_tech_behavior, "tech")]
 
             if config.pad_file:
                 cmd += ["--fix_pins", resolve_vtr_source_file(config, config.pad_file)]
-            
             parse_cmd = None
+            second_parse_cmd = None
             if config.parse_file:
                 parse_cmd = [run_dir, resolve_vtr_source_file(config, config.parse_file, str(PurePath("parse").joinpath("parse_config")))]
-                
+
+            if config.second_parse_file:
+                parse_cmd = [run_dir, resolve_vtr_source_file(config, config.second_parse_file, str(PurePath("parse").joinpath("parse_config")))]
             #We specify less verbosity to the sub-script
             # This keeps the amount of output reasonable
             if max(0, args.verbosity - 1):
                 cmd += ["-verbose"]
 
-            jobs.append(Job(config.task_name, arch, circuit, work_dir, cmd, parse_cmd))
+            jobs.append(Job(config.task_name, arch, circuit, work_dir, cmd, parse_cmd, second_parse_cmd))
 
     return jobs
 
@@ -437,7 +453,7 @@ def run_parallel(args, configs, queued_jobs):
     #so reverse the list now so we get the expected order. This also ensures
     #we are working with a copy of the jobs
     queued_jobs = list(reversed(queued_jobs))
-
+    
     #Find the max taskname length for pretty printing
     max_taskname_len = 0
     for job in queued_jobs:
@@ -463,11 +479,6 @@ def run_parallel(args, configs, queued_jobs):
                     #print "Starting {}: {}".format(job.task_name(), job.job_name())
                     #print job.command()
                     proc = run_vtr_flow(job.run_command(), find_vtr_file("run_vtr_flow.py"))
-                if job.parse_command():
-                    parse_filepath = str(PurePath(work_dir) / "parse_results.txt")
-                    with open(parse_filepath, 'w+') as parse_file:
-                        with redirect_stdout(parse_file):
-                            parse_vtr_flow(job.parse_command())
                 running_procs.append((proc, job, log_file))
             while len(running_procs) > 0:
                 #Are any of the workers finished?
@@ -479,17 +490,11 @@ def run_parallel(args, configs, queued_jobs):
                     if status is not None:
                         #Process has completed
                         if status == 0:
-                            print_verbose(BASIC_VERBOSITY, args.verbosity, 
-                                         "Finished {:<{w}}: {}".format(job.task_name(), job.job_name(), w=max_taskname_len))
-
                             if args.verbosity >= ALL_LOG_VERBOSITY:
                                 print_log(log_file)
                         else:
                             #Failed
                             num_failed += 1
-                            print_verbose(BASIC_VERBOSITY, args.verbosity, 
-                                         "Failed   {:<{w}}: {}".format(job.task_name(), job.job_name(), w=max_taskname_len))
-
                             if args.verbosity >= FAILED_LOG_VERBOSITY:
                                 print_log(log_file)
 
@@ -598,7 +603,7 @@ def parse_task(args, config, config_jobs, task_metrics_filepath=None, flow_metri
     which is an amalgam of the parse_rests.txt's produced by each job (flow invocation)
     """
     run_dir = find_latest_run_dir(args, config)
-
+    
     print_verbose(BASIC_VERBOSITY, args.verbosity, "Parsing task run {}".format(run_dir))
     
     if task_metrics_filepath is None:
@@ -608,6 +613,17 @@ def parse_task(args, config, config_jobs, task_metrics_filepath=None, flow_metri
     max_arch_len = len("architecture")
     max_circuit_len = len("circuit")
     for job in config_jobs:
+        work_dir = job.work_dir(get_latest_run_dir(find_task_dir(args, config)))
+        if job.parse_command():
+                        parse_filepath = str(PurePath(work_dir) / flow_metrics_basename)
+                        with open(parse_filepath, 'w+') as parse_file:
+                            with redirect_stdout(parse_file):
+                                parse_vtr_flow(job.parse_command())
+        if job.second_parse_command():
+                        parse_filepath = str(PurePath(work_dir) / "parse_results_2.txt")
+                        with open(parse_filepath, 'w+') as parse_file:
+                            with redirect_stdout(parse_file):
+                                parse_vtr_flow(job.second_parse_command())
         max_arch_len = max(max_arch_len, len(job.arch()))
         max_circuit_len = max(max_circuit_len, len(job.circuit()))
         

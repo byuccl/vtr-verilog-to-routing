@@ -28,17 +28,17 @@ def vtr_command_argparser(prog=None):
                 Examples
                 --------
 
-                    Run the regression test 'vtr_strong':
+                    Run the regression test 'vtr_reg_strong':
 
-                        %(prog)s vtr_strong
+                        %(prog)s vtr_reg_strong
 
-                    Run the regression tests 'vtr_basic' and 'vtr_strong':
+                    Run the regression tests 'vtr_reg_basic' and 'vtr_reg_strong':
 
-                        %(prog)s vtr_basic vtr_strong
+                        %(prog)s vtr_reg_basic vtr_reg_strong
 
-                    Run the regression tests 'vtr_basic' and 'vtr_strong' with 8 parallel workers:
+                    Run the regression tests 'vtr_reg_basic' and 'vtr_reg_strong' with 8 parallel workers:
 
-                        %(prog)s vtr_basic vtr_strong -j8
+                        %(prog)s vtr_reg_basic vtr_reg_strong -j8
                 """
              )
 
@@ -54,7 +54,7 @@ def vtr_command_argparser(prog=None):
     #
     parser.add_argument('reg_test',
                         nargs="+",
-                        choices=["vtr_basic", "vtr_strong", "vtr_nightly", "vtr_weekly", "odin_micro", "odin_full"],
+                        choices=["vtr_reg_basic", "vtr_reg_strong", "vtr_reg_nightly", "vtr_reg_weekly", "odin_micro", "odin_full"],
                         help="Regression tests to be run")
 
     parser.add_argument("--create_golden",
@@ -79,6 +79,11 @@ def vtr_command_argparser(prog=None):
                         help="Directory to store intermediate and result files."
                              "If None, set to the relevante directory under $VTR_ROOT/vtr_flow/tasks.")
 
+    parser.add_argument("-show_failures",
+                        default=False,
+                        action="store_true",
+                        help="Produce additional debug output")
+
     parser.add_argument("--debug",
                         default=False,
                         action="store_true",
@@ -91,11 +96,11 @@ def main():
 
 def vtr_command_main(arg_list, prog=None):
     start = datetime.now()
-
+    print("=============================================")
+    print("    Verilog-to-Routing Regression Testing")
+    print("=============================================")
     #Load the arguments
     args = vtr_command_argparser(prog).parse_args(arg_list)
-
-    print_verbose(BASIC_VERBOSITY, args.verbosity, "# {} {}\n".format(prog, ' '.join(arg_list)))
 
     num_func_failures = 0
     num_qor_failures = 0
@@ -115,9 +120,7 @@ def vtr_command_main(arg_list, prog=None):
             vtr_task_list_files = []
             for reg_test in args.reg_test:
                 if reg_test.startswith("vtr"):
-
-                    base_testname = reg_test.split('_')[-1]
-                    task_list_filepath = str(Path(find_vtr_root()) / 'vtr_flow' / 'tasks' / 'regression_tests' / ('vtr_reg_' + base_testname) / 'task_list.txt')
+                    task_list_filepath = str(Path(find_vtr_root()) / 'vtr_flow' / 'tasks' / 'regression_tests' / reg_test / 'task_list.txt')
                     vtr_task_list_files.append(task_list_filepath)
 
             #Run the actual tasks, recording functionality failures
@@ -166,12 +169,16 @@ def run_odin_test(args, test_name):
 
 def run_tasks(args, task_lists):
     #Call 'vtr task'
+    print("Running {}".format(args.reg_test[0]))
+    print("-------------------------------------------------------------------------------") 
     vtr_task_cmd = [find_vtr_file('vtr-task.py')] 
     vtr_task_cmd += ['-l'] + task_lists
     vtr_task_cmd += ['-j', str(args.j),
                      '-v', str(max(0, args.verbosity - 1)),
                      '--print_metadata', str(args.debug)
                      ]
+    if args.show_failures:
+        vtr_task_cmd += ["-show_failures"]
     if args.work_dir:
         vtr_task_cmd += ["--work_dir", args.workdir]
 
