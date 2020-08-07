@@ -150,6 +150,11 @@ def vtr_command_argparser(prog=None):
                         default=2,
                         type=int,
                         help="Sets the verbosity of the script. Higher values produce more output.")
+    
+    parser.add_argument("-minw_hint_factor",
+                        default=1,
+                        type=float,
+                        help="Minimum width hint factor to multiplied by the minimum width hint")
 
     parser.add_argument("--work_dir",
                         default=None,
@@ -391,12 +396,26 @@ def create_jobs(args, configs):
             if config.script_params_list_add:
                 for value in config.script_params_list_add:
                     cmd.append(value)
+                    
+            pass_req_filepath = str(PurePath(find_vtr_root()) / 'vtr_flow' / 'parse' / 'pass_requirements'/ config.pass_requirements_file)
+            pass_requirements = load_pass_requirements(pass_req_filepath)
+
+            if "min_chan_width" in pass_requirements:
+                golden_results_filepath = str(PurePath(config.config_dir).joinpath("golden_results.txt"))
+                golden_results = load_parse_results(golden_results_filepath)
+                expected_min_W = int(golden_results.metrics(arch,circuit)["min_chan_width"])
+                expected_min_W = int(expected_min_W * args.minw_hint_factor)
+                expected_min_W += expected_min_W % 2
+                if expected_min_W > 0:
+                    cmd += ["--min_route_chan_width_hint", str(expected_min_W)] 
+                    
             #Apply any special config based parameters
             if config.cmos_tech_behavior:
                 cmd += ["--power", resolve_vtr_source_file(config, config.cmos_tech_behavior, "tech")]
 
             if config.pad_file:
                 cmd += ["--fix_pins", resolve_vtr_source_file(config, config.pad_file)]
+            
             parse_cmd = None
             second_parse_cmd = None
             if config.parse_file:

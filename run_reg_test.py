@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 from multiprocessing import Pool
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / 'python_libs'))
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'vtr_flow/scripts/python_libs'))
 
 import vtr
 from vtr import error, load_list_file, find_vtr_file, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, VERBOSITY_CHOICES, load_task_config, TaskConfig, find_task_config_file, CommandRunner
