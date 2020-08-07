@@ -454,7 +454,7 @@ def find_task_dir(args, config):
 
 def ret_expected_min_W(circuit, arch, golden_results):
     golden_metrics = golden_results.metrics(arch, circuit)
-    if golden_metrics and golden_metrics["min_chan_width"]:
+    if golden_metrics and "min_chan_width" in golden_metrics:
         return int(golden_metrics["min_chan_width"])
     return -1
 
