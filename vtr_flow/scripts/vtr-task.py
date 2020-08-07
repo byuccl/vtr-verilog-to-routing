@@ -397,17 +397,13 @@ def create_jobs(args, configs):
                 for value in config.script_params_list_add:
                     cmd.append(value)
                     
-            pass_req_filepath = str(PurePath(find_vtr_root()) / 'vtr_flow' / 'parse' / 'pass_requirements'/ config.pass_requirements_file)
-            pass_requirements = load_pass_requirements(pass_req_filepath)
-
-            if "min_chan_width" in pass_requirements:
-                golden_results_filepath = str(PurePath(config.config_dir).joinpath("golden_results.txt"))
-                golden_results = load_parse_results(golden_results_filepath)
-                expected_min_W = int(golden_results.metrics(arch,circuit)["min_chan_width"])
-                expected_min_W = int(expected_min_W * args.minw_hint_factor)
-                expected_min_W += expected_min_W % 2
-                if expected_min_W > 0:
-                    cmd += ["--min_route_chan_width_hint", str(expected_min_W)] 
+            golden_results_filepath = str(PurePath(config.config_dir).joinpath("golden_results.txt"))
+            golden_results = load_parse_results(golden_results_filepath)
+            expected_min_W = ret_expected_min_W(circuit, arch,golden_results)
+            expected_min_W = int(expected_min_W * args.minw_hint_factor)
+            expected_min_W += expected_min_W % 2
+            if expected_min_W > 0:
+                cmd += ["--min_route_chan_width_hint", str(expected_min_W)] 
                     
             #Apply any special config based parameters
             if config.cmos_tech_behavior:
@@ -455,6 +451,12 @@ def find_task_dir(args, config):
         assert task_dir.is_dir
 
     return str(task_dir)
+
+def ret_expected_min_W(circuit, arch, golden_results):
+    golden_metrics = golden_results.metrics(arch, circuit)
+    if golden_metrics and golden_metrics["min_chan_width"]:
+        return int(golden_metrics["min_chan_width"])
+    return -1
 
 def run_parallel(args, configs, queued_jobs):
     """

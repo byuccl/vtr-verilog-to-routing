@@ -54,13 +54,18 @@ def vtr_command_argparser(prog=None):
     #
     parser.add_argument('reg_test',
                         nargs="+",
-                        choices=["vtr_reg_basic", "vtr_reg_strong", "vtr_reg_nightly", "vtr_reg_weekly", "odin_micro", "odin_full"],
+                        choices=["vtr_reg_basic", "vtr_reg_strong", "vtr_reg_nightly", "vtr_reg_weekly", "odin_reg_micro", "odin_full"],
                         help="Regression tests to be run")
 
     parser.add_argument("--create_golden",
                         default=False,
                         action="store_true",
                         help="Create golden reference results for the associated tasks")
+
+    parser.add_argument("-skip_qor",
+                        default=False,
+                        action="store_true",
+                        help="Skips running the Qor tests")
 
     parser.add_argument('-j',
                         default=1,
@@ -127,12 +132,13 @@ def vtr_command_main(arg_list, prog=None):
             num_func_failures += run_tasks(args, vtr_task_list_files)
 
             #Check against golden results
-            num_qor_failures += check_tasks_qor(args, vtr_task_list_files)
+            if not args.skip_qor:
+                num_qor_failures += check_tasks_qor(args, vtr_task_list_files)
 
 
         #Final summary
         print_verbose(BASIC_VERBOSITY, args.verbosity, "")
-        if num_func_failures == 0 and num_qor_failures == 0:
+        if num_func_failures == 0 and (num_qor_failures == 0 or args.skip_qor):
             print_verbose(BASIC_VERBOSITY, args.verbosity, 
                          "PASSED All Test(s)")
         elif num_func_failures != 0 or num_qor_failures != 0:
@@ -145,10 +151,10 @@ def vtr_command_main(arg_list, prog=None):
 
 def run_odin_test(args, test_name):
     odin_reg_script = None
-    if test_name == "odin_micro":
+    if test_name == "odin_reg_micro":
         odin_reg_script = find_vtr_file("verify_microbenchmarks.sh", is_executabe=True)
     else:
-        assert test_name == "odin_full"
+        assert test_name == "odin_reg_full"
         odin_reg_script = find_vtr_file("verify_regression_tests.sh", is_executabe=True)
 
     assert odin_reg_script
