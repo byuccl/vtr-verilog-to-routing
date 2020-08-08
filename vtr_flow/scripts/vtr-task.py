@@ -381,6 +381,8 @@ def create_jobs(args, configs):
     jobs = []
     for config in configs:
         for arch, circuit in itertools.product(config.archs, config.circuits):
+            golden_results_filepath = str(PurePath(config.config_dir).joinpath("golden_results.txt"))
+            golden_results = load_parse_results(golden_results_filepath)
             abs_arch_filepath = resolve_vtr_source_file(config, arch, config.arch_dir)
             abs_circuit_filepath = resolve_vtr_source_file(config, circuit, config.circuit_dir)  
             work_dir = str(PurePath(arch).joinpath(circuit))         
@@ -388,17 +390,17 @@ def create_jobs(args, configs):
             #Collect any extra script params from the config file
             cmd = [abs_circuit_filepath, abs_arch_filepath]
             cmd += ["-temp_dir", run_dir]
+            expected_vpr_status = ret_expected_vpr_status(arch, circuit, golden_results)
+            if (expected_vpr_status != "success" and expected_vpr_status != "Unkown"):
+                cmd += ["-expect_fail", expected_vpr_status]
+
             if args.show_failures:
                 cmd += ["-show_failures"]
             cmd += ["-name","{}:\t\t\t{}".format(config.task_name.split("_", 1)[1],work_dir)]
             cmd += config.script_params if config.script_params else []
             cmd += config.script_params_common if config.script_params_common else []
-            if config.script_params_list_add:
-                for value in config.script_params_list_add:
-                    cmd.append(value)
                     
-            golden_results_filepath = str(PurePath(config.config_dir).joinpath("golden_results.txt"))
-            golden_results = load_parse_results(golden_results_filepath)
+            
             expected_min_W = ret_expected_min_W(circuit, arch,golden_results)
             expected_min_W = int(expected_min_W * args.minw_hint_factor)
             expected_min_W += expected_min_W % 2
@@ -407,7 +409,7 @@ def create_jobs(args, configs):
                     
             #Apply any special config based parameters
             if config.cmos_tech_behavior:
-                cmd += ["--power", resolve_vtr_source_file(config, config.cmos_tech_behavior, "tech")]
+                cmd += ["-cmos_tech", resolve_vtr_source_file(config, config.cmos_tech_behavior, "tech")]
 
             if config.pad_file:
                 cmd += ["--fix_pins", resolve_vtr_source_file(config, config.pad_file)]
@@ -423,8 +425,11 @@ def create_jobs(args, configs):
             # This keeps the amount of output reasonable
             if max(0, args.verbosity - 1):
                 cmd += ["-verbose"]
-
-            jobs.append(Job(config.task_name, arch, circuit, work_dir, cmd, parse_cmd, second_parse_cmd))
+            if config.script_params_list_add:
+                for value in config.script_params_list_add:
+                    jobs.append(Job(config.task_name, arch, circuit, work_dir + "/common_{}".format(value.replace(" ", "_")), cmd + value.split(" "), parse_cmd, second_parse_cmd))
+            else:
+                jobs.append(Job(config.task_name, arch, circuit, work_dir, cmd, parse_cmd, second_parse_cmd))
 
     return jobs
 
@@ -457,6 +462,13 @@ def ret_expected_min_W(circuit, arch, golden_results):
     if golden_metrics and "min_chan_width" in golden_metrics:
         return int(golden_metrics["min_chan_width"])
     return -1
+
+def ret_expected_vpr_status(arch, circuit, golden_results):
+    golden_metrics = golden_results.metrics(arch,circuit)
+    if not golden_metrics or 'vpr_status' not in golden_metrics :
+        return "Unkown"
+
+    return golden_metrics['vpr_status']
 
 def run_parallel(args, configs, queued_jobs):
     """

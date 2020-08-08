@@ -108,7 +108,7 @@ def load_task_config(config_file):
             if key not in key_values:
                 key_values[key] = []
             if key == "script_params_list_add":
-                key_values[key] += value.split(" ")
+                key_values[key] += [value]
             else:
                 key_values[key].append(value)
 
