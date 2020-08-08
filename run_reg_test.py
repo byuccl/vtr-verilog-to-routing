@@ -208,7 +208,7 @@ def vtr_command_main(arg_list, prog=None):
 
 
 def run_odin_test(args, test_name):
-    odin_reg_script = [find_vtr_file("verify_odin.sh"), "--clean", "-C ", find_vtr_file("output_on_error.conf"), "--nb_of_process", str(args.j), "--test", "{}/ODIN_II/regression_test/benchmark/".format(find_vtr_root())]
+    odin_reg_script = [find_vtr_file("verify_odin.sh"), "--clean", "-C", find_vtr_file("output_on_error.conf"), "--nb_of_process", str(args.j), "--test", "{}/ODIN_II/regression_test/benchmark/".format(find_vtr_root())]
     if test_name == "odin_reg_full":
         odin_reg_script[-1] += "suite/full_suite"
     elif test_name == "odin_reg_syntax":

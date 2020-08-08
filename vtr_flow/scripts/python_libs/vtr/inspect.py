@@ -3,6 +3,7 @@
 """
 import re
 from collections import OrderedDict
+from pathlib import Path
 try:
     # Try for the fast c-based version first
     import xml.etree.cElementTree as ET
@@ -275,9 +276,13 @@ def load_parse_results(parse_results_filepath, primary_key_set=None):
     header = []
 
     parse_results = ParseResults()
+    if not Path(parse_results_filepath).exists():
+        return parse_results
 
     with open(parse_results_filepath) as file:
         for lineno, row in enumerate(file):
+            if row[0] == "+":
+                row = row[1:]
             elements = [elem.strip() for elem in row.split("\t")]
 
             if lineno == 0:
