@@ -58,7 +58,7 @@ class EqualPassRequirement(PassRequirement):
         if golden_value == check_value:
             return True, ""
         else:
-            return False, "Task value '{}' does not match golden value '{}'".format(golden_value, check_value)
+            return False, "Task value '{}' does not match golden value '{}'".format(check_value, golden_value)
 
 class RangePassRequirement(PassRequirement):
 
@@ -110,7 +110,7 @@ class RangePassRequirement(PassRequirement):
                 return False, "unable to normalize relative value (golden value is zero)"
 
         elif original_check_value == original_golden_value:
-                        return True, "Check value equal to golden value"
+            return True, "Check value equal to golden value"
         
         else:
             

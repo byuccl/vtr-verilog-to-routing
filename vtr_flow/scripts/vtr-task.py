@@ -389,9 +389,9 @@ def create_jobs(args, configs):
             run_dir = str(Path(get_next_run_dir(find_task_dir(args,config))) / work_dir)
             #Collect any extra script params from the config file
             cmd = [abs_circuit_filepath, abs_arch_filepath]
-            cmd += ["-temp_dir", run_dir]
+            cmd += ["-temp_dir", run_dir + "/common"]
             expected_vpr_status = ret_expected_vpr_status(arch, circuit, golden_results)
-            if (expected_vpr_status != "success" and expected_vpr_status != "Unkown"):
+            if (expected_vpr_status != "success" and expected_vpr_status != "Unknown"):
                 cmd += ["-expect_fail", expected_vpr_status]
 
             if args.show_failures:
@@ -417,19 +417,23 @@ def create_jobs(args, configs):
             parse_cmd = None
             second_parse_cmd = None
             if config.parse_file:
-                parse_cmd = [run_dir, resolve_vtr_source_file(config, config.parse_file, str(PurePath("parse").joinpath("parse_config")))]
+                parse_cmd = [run_dir+"/common", resolve_vtr_source_file(config, config.parse_file, str(PurePath("parse").joinpath("parse_config")))]
 
             if config.second_parse_file:
-                parse_cmd = [run_dir, resolve_vtr_source_file(config, config.second_parse_file, str(PurePath("parse").joinpath("parse_config")))]
+                parse_cmd = [run_dir+"/common", resolve_vtr_source_file(config, config.second_parse_file, str(PurePath("parse").joinpath("parse_config")))]
             #We specify less verbosity to the sub-script
             # This keeps the amount of output reasonable
             if max(0, args.verbosity - 1):
                 cmd += ["-verbose"]
             if config.script_params_list_add:
                 for value in config.script_params_list_add:
+                    temp_dir = work_dir + "/common_{}".format(value.replace(" ", "_"))
+                    for string in cmd:
+                        if "\common" in string:
+                            string
                     jobs.append(Job(config.task_name, arch, circuit, work_dir + "/common_{}".format(value.replace(" ", "_")), cmd + value.split(" "), parse_cmd, second_parse_cmd))
             else:
-                jobs.append(Job(config.task_name, arch, circuit, work_dir, cmd, parse_cmd, second_parse_cmd))
+                jobs.append(Job(config.task_name, arch, circuit, work_dir + "/common", cmd, parse_cmd, second_parse_cmd))
 
     return jobs
 
@@ -466,7 +470,7 @@ def ret_expected_min_W(circuit, arch, golden_results):
 def ret_expected_vpr_status(arch, circuit, golden_results):
     golden_metrics = golden_results.metrics(arch,circuit)
     if not golden_metrics or 'vpr_status' not in golden_metrics :
-        return "Unkown"
+        return "Unknown"
 
     return golden_metrics['vpr_status']
 
