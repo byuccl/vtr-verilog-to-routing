@@ -57,6 +57,7 @@ class CommandRunner:
             indent="\t",
             show_failures=False,
             valgrind=False,
+            expect_fail=None,
     ):
         if echo_cmd is None:
             echo_cmd = verbose
@@ -69,6 +70,7 @@ class CommandRunner:
         self._indent = indent
         self._show_failures = show_failures
         self._valgrind = valgrind
+        self._expect_fail = expect_fail
 
     def run_system_command(
             self, cmd, temp_dir, log_filename=None, expected_return_code=0, indent_depth=0
@@ -200,7 +202,7 @@ class CommandRunner:
             for line in cmd_output:
                 print(indent_depth * self._indent + line, end="")
 
-        if self._show_failures and cmd_errored:
+        if self._show_failures and cmd_errored and not self._expect_fail:
             print(
                 "\nFailed log file follows({}):".format(
                     str((temp_dir / log_filename).resolve())
@@ -208,17 +210,9 @@ class CommandRunner:
             )
             for line in cmd_output:
                 print(indent_depth * self._indent + "<" + line, end="")
-            raise CommandError(
-                "Executable {exec_name} failed".format(
-                    exec_name=PurePath(orig_cmd[0]).name
-                ),
-                cmd=cmd,
-                log=str(temp_dir / log_filename),
-                returncode=cmd_returncode,
-            )
         if cmd_errored:
             raise CommandError(
-                "{}".format(PurePath(orig_cmd[0]).name),
+                "Executable {} failed".format(PurePath(orig_cmd[0]).name),
                 cmd=cmd,
                 log=str(temp_dir / log_filename),
                 returncode=cmd_returncode,

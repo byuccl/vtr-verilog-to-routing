@@ -3,6 +3,7 @@ Module that contains the task functions
 """
 from pathlib import Path
 from pathlib import PurePath
+from shlex import split
 
 from vtr import VtrError, find_vtr_root, load_list_file
 
@@ -122,10 +123,10 @@ def load_task_config(config_file):
 
     # We split the script params into a list
     if "script_params" in key_values:
-        key_values["script_params"] = key_values["script_params"].split(" ")
+        key_values["script_params"] = split(key_values["script_params"])
 
     if "script_params_common" in key_values:
-        key_values["script_params_common"] = key_values["script_params_common"].split(" ")
+        key_values["script_params_common"] = split(key_values["script_params_common"])
 
     # Check that all required fields were specified
     for required_key in required_keys:

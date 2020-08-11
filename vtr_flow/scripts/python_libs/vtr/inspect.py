@@ -184,14 +184,14 @@ class ParseResults:
         self._metrics = OrderedDict()
 
     def primary_keys(self):
-        return ("architecture", "circuit")
+        return ("architecture", "circuit","script_params")
 
-    def add_result(self, arch, circuit, parse_result):
-        self._metrics[(arch, circuit)] = parse_result
+    def add_result(self, arch, circuit, parse_result, script_param = None):
+        self._metrics[(arch, circuit, script_param)] = parse_result
 
-    def metrics(self, arch, circuit):
-        if (arch, circuit) in self._metrics:
-            return self._metrics[(arch, circuit)]
+    def metrics(self, arch, circuit, script_param = None):
+        if (arch, circuit, script_param) in self._metrics:
+            return self._metrics[(arch, circuit, script_param)]
         else:
             return None
 
@@ -293,6 +293,7 @@ def load_parse_results(parse_results_filepath, primary_key_set=None):
 
                 arch=None
                 circuit=None
+                script_param=None
                 for i, elem in enumerate(elements):
                     metric = header[i]
 
@@ -306,13 +307,15 @@ def load_parse_results(parse_results_filepath, primary_key_set=None):
                         arch = elem
                     elif metric == "circuit":
                         circuit = elem
+                    elif metric == "script_params":
+                        script_param = elem
 
                     result[metric] = elem
 
                 if not (arch and circuit):
                     print(parse_results_filepath)
                 
-                parse_results.add_result(arch, circuit, result)
+                parse_results.add_result(arch, circuit, result, script_param)
 
     return parse_results
 

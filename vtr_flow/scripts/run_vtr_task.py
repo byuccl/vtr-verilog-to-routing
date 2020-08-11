@@ -216,7 +216,9 @@ def vtr_command_main(arg_list, prog=None):
     finally:
         if args.print_metadata:
             print ("\n# {} took {} (exiting {})".format(prog, format_elapsed_time(datetime.now() - start), num_failed))
-    sys.exit(num_failed)
+    if(__name__=="main"):
+        sys.exit(num_failed)
+    return num_failed
 
 def run_tasks(args, configs):
     """
@@ -314,13 +316,13 @@ def check_golden_results_for_task(args, config):
         #Verify that all params and pass requirement metric are included in both the golden and task results
         # We do not worry about non-pass_requriements elements being different or missing
         for metric in pass_requirements.keys():
-            for (arch, circuit), result in task_results.all_metrics().items():
+            for (arch, circuit, script_params), result in task_results.all_metrics().items():
                 if metric not in result:
                     #print_verbose(BASIC_VERBOSITY, args.verbosity,
                         #"Warning: Required metric '{}' missing from task results".format(metric), task_results_filepath) 
                     raise InspectError("Required metric '{}' missing from task results".format(metric), task_results_filepath) 
 
-            for (arch, circuit), result in golden_results.all_metrics().items():
+            for (arch, circuit, script_params), result in golden_results.all_metrics().items():
                 if metric not in result:
                     #print_verbose(BASIC_VERBOSITY, args.verbosity,
                         #"Warning: Required metric '{}' missing from golden results".format(metric), golden_results_filepath) 
@@ -328,28 +330,28 @@ def check_golden_results_for_task(args, config):
 
         #Load the primary keys for golden and task
         golden_primary_keys = []
-        for (arch, circuit), metrics in golden_results.all_metrics().items():
-            golden_primary_keys.append((arch, circuit))
+        for (arch, circuit, script_params), metrics in golden_results.all_metrics().items():
+            golden_primary_keys.append((arch, circuit,script_params))
 
         task_primary_keys = []
-        for (arch, circuit), metrics in task_results.all_metrics().items():
-            task_primary_keys.append((arch, circuit))
+        for (arch, circuit,script_params), metrics in task_results.all_metrics().items():
+            task_primary_keys.append((arch, circuit,script_params))
 
         #Ensure that task has all the golden cases
-        for arch, circuit in golden_primary_keys:
-            if task_results.metrics(arch, circuit) == None:
+        for arch, circuit, script_params in golden_primary_keys:
+            if task_results.metrics(arch, circuit,script_params) == None:
                 raise InspectError("Required case {}/{} missing from task results: {}".format(arch, circuit, task_results_filepath))
     
         #Warn about any elements in task that are not found in golden
-        for arch, circuit in task_primary_keys:
-            if golden_results.metrics(arch, circuit) == None:
+        for arch, circuit, script_params in task_primary_keys:
+            if golden_results.metrics(arch, circuit,script_params) == None:
                 print_verbose(BASIC_VERBOSITY, args.verbosity,
                              "Warning: Task includes result for {}/{} missing in golden results".format(arch, circuit))
 
         #Verify that task results pass each metric for all cases in golden
-        for (arch, circuit) in golden_primary_keys:
-            golden_metrics = golden_results.metrics(arch, circuit)
-            task_metrics = task_results.metrics(arch, circuit)
+        for (arch, circuit, script_params) in golden_primary_keys:
+            golden_metrics = golden_results.metrics(arch, circuit, script_params)
+            task_metrics = task_results.metrics(arch, circuit, script_params)
 
             for metric in pass_requirements.keys():
 
@@ -390,9 +392,7 @@ def create_jobs(args, configs):
             #Collect any extra script params from the config file
             cmd = [abs_circuit_filepath, abs_arch_filepath]
             cmd += ["-temp_dir", run_dir + "/common"]
-            expected_vpr_status = ret_expected_vpr_status(arch, circuit, golden_results)
-            if (expected_vpr_status != "success" and expected_vpr_status != "Unknown"):
-                cmd += ["-expect_fail", expected_vpr_status]
+            
 
             if args.show_failures:
                 cmd += ["-show_failures"]
@@ -400,12 +400,6 @@ def create_jobs(args, configs):
             cmd += config.script_params if config.script_params else []
             cmd += config.script_params_common if config.script_params_common else []
                     
-            
-            expected_min_W = ret_expected_min_W(circuit, arch,golden_results)
-            expected_min_W = int(expected_min_W * args.minw_hint_factor)
-            expected_min_W += expected_min_W % 2
-            if expected_min_W > 0:
-                cmd += ["--min_route_chan_width_hint", str(expected_min_W)] 
                     
             #Apply any special config based parameters
             if config.cmos_tech_behavior:
@@ -431,9 +425,30 @@ def create_jobs(args, configs):
                     for string in cmd:
                         if "\common" in string:
                             string
+                    expected_min_W = ret_expected_min_W(circuit, arch, golden_results, value)
+                    expected_min_W = int(expected_min_W * args.minw_hint_factor)
+                    expected_min_W += expected_min_W % 2
+                    if expected_min_W > 0:
+                        cmd += ["--min_route_chan_width_hint", str(expected_min_W)] 
+                    expected_vpr_status = ret_expected_vpr_status(arch, circuit, golden_results, value)
+                    if (expected_vpr_status != "success" and expected_vpr_status != "Unknown"):
+                        cmd += ["-expect_fail", expected_vpr_status]
                     jobs.append(Job(config.task_name, arch, circuit, work_dir + "/common_{}".format(value.replace(" ", "_")), cmd + value.split(" "), parse_cmd, second_parse_cmd))
             else:
+                expected_min_W = ret_expected_min_W(circuit, arch, golden_results)
+                expected_min_W = int(expected_min_W * args.minw_hint_factor)
+                expected_min_W += expected_min_W % 2
+                if expected_min_W > 0:
+                    cmd += ["--min_route_chan_width_hint", str(expected_min_W)] 
+                expected_vpr_status = ret_expected_vpr_status(arch, circuit, golden_results)
+                if (expected_vpr_status != "success" and expected_vpr_status != "Unknown"):
+                    cmd += ["-expect_fail", expected_vpr_status]
                 jobs.append(Job(config.task_name, arch, circuit, work_dir + "/common", cmd, parse_cmd, second_parse_cmd))
+                if config.parse_file:
+                    parse_cmd += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format("common")]
+
+                if config.second_parse_file:
+                    parse_cmd += []
 
     return jobs
 
@@ -461,14 +476,24 @@ def find_task_dir(args, config):
 
     return str(task_dir)
 
-def ret_expected_min_W(circuit, arch, golden_results):
-    golden_metrics = golden_results.metrics(arch, circuit)
+def ret_expected_min_W(circuit, arch, golden_results, script_params=None):
+    if script_params and "common" not in script_params:
+        script_params = "common_" + script_params
+    if script_params:
+        script_params = script_params.replace(" ","_")
+    golden_metrics = golden_results.metrics(arch,circuit,script_params)
     if golden_metrics and "min_chan_width" in golden_metrics:
         return int(golden_metrics["min_chan_width"])
     return -1
 
-def ret_expected_vpr_status(arch, circuit, golden_results):
-    golden_metrics = golden_results.metrics(arch,circuit)
+def ret_expected_vpr_status(arch, circuit, golden_results, script_params=None):
+    if script_params and "common" not in script_params:
+        script_params = "common_" + script_params
+    if script_params:
+        script_params = script_params.replace(" ","_")
+    else:
+        script_params = "common"
+    golden_metrics = golden_results.metrics(arch,circuit,script_params)
     if not golden_metrics or 'vpr_status' not in golden_metrics :
         return "Unknown"
 
@@ -667,7 +692,7 @@ def parse_task(args, config, config_jobs, task_metrics_filepath=None, flow_metri
     with open(task_parse_results_filepath, "w") as out_f:
 
         #Start the header
-        print("{:<{arch_width}}\t{:<{circuit_width}}\t".format("architecture", "circuit", arch_width=max_arch_len, circuit_width=max_circuit_len), file= out_f, end="")
+        
         header = True
         for job in config_jobs:
             #Open the job results file
@@ -684,7 +709,7 @@ def parse_task(args, config, config_jobs, task_metrics_filepath=None, flow_metri
                         print(lines[0],file=out_f, end="")
                         header = False
                     #Second line is the data
-                    print("{:<{arch_width}}\t{:<{circuit_width}}\t{}".format(job.arch(), job.circuit(), lines[1], arch_width=max_arch_len, circuit_width=max_circuit_len), file = out_f, end="")
+                    print(lines[1], file = out_f, end="")
             else:
                 print_verbose(BASIC_VERBOSITY, args.verbosity, "Warning: Flow result file not found (task QoR will be incomplete): {} ".format(str(job_parse_results_filepath)))
 

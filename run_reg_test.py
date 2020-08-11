@@ -10,7 +10,10 @@ from datetime import datetime
 sys.path.insert(
     0, str(Path(__file__).resolve().parent / "vtr_flow/scripts/python_libs")
 )
-
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent / "vtr_flow/scripts")
+)
+from run_vtr_task import vtr_command_main as run_vtr_task
 from vtr import (
     find_vtr_file,
     print_verbose,
@@ -247,8 +250,7 @@ def run_tasks(args, task_lists):
     print(
         "-------------------------------------------------------------------------------"
     )
-    vtr_task_cmd = [find_vtr_file("vtr-task.py")]
-    vtr_task_cmd += ["-l"] + task_lists
+    vtr_task_cmd = ["-l"] + task_lists
     vtr_task_cmd += [
         "-j",
         str(args.j),
@@ -263,12 +265,11 @@ def run_tasks(args, task_lists):
         vtr_task_cmd += ["--work_dir", args.workdir]
 
     # Exit code is number of failures
-    return subprocess.call(vtr_task_cmd)
+    return run_vtr_task(vtr_task_cmd)
 
 
 def check_tasks_qor(args, task_lists):
-    vtr_task_cmd = [find_vtr_file("vtr-task.py")]
-    vtr_task_cmd += ["-l"] + task_lists
+    vtr_task_cmd = ["-l"] + task_lists
     vtr_task_cmd += [
         "-v",
         str(max(0, args.verbosity - 1)),
@@ -280,7 +281,7 @@ def check_tasks_qor(args, task_lists):
         vtr_task_cmd += ["--work_dir", args.workdir]
 
     # Exit code is number of failures
-    return subprocess.call(vtr_task_cmd)
+    return run_vtr_task(vtr_task_cmd)
 
 
 def create_tasks_golden_result(args, task_lists):

@@ -411,6 +411,7 @@ def vtr_command_main(arg_list, prog=None):
         verbose=args.verbose,
         show_failures=args.show_failures,
         valgrind=args.valgrind,
+        expect_fail=args.expect_fail
     )
     exit_status = 0
     return_status = 0
