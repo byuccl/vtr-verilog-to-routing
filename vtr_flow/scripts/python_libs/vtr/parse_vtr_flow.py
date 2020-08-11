@@ -24,8 +24,8 @@ def parse_vtr_flow(arg_list):
     """
     parse_path = arg_list[0]
     parse_config_file = arg_list[1]
-
-    parse_config_file = vtr.util.verify_file(parse_config_file, "parse config file")
+    #print(arg_list,file=(Path(parse_path)/"args.txt").open("w+"))
+    parse_config_file = vtr.util.verify_file(parse_config_file, "parse config")
 
     extra_params = arg_list[2:]
     if parse_config_file is None:

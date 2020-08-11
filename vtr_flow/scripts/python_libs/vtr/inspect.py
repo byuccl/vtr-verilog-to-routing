@@ -54,11 +54,11 @@ class EqualPassRequirement(PassRequirement):
     def type(self):
         return "Equal"
 
-    def check_passed(self, golden_value, check_value):
+    def check_passed(self, golden_value, check_value, check_string = "golden value"):
         if golden_value == check_value:
             return True, ""
         else:
-            return False, "Task value '{}' does not match golden value '{}'".format(check_value, golden_value)
+            return False, "Task value '{}' does not match {} '{}'".format(check_value, check_string, golden_value)
 
 class RangePassRequirement(PassRequirement):
 
@@ -80,13 +80,13 @@ class RangePassRequirement(PassRequirement):
     def max_value(self):
         return self._max_value
 
-    def check_passed(self, golden_value, check_value):
+    def check_passed(self, golden_value, check_value, check_string = "golden value"):
         if golden_value == None and check_value == None:
             return True, "both golden and check are None"
         elif golden_value == None and check_value != None:
-            return False, "golden value is None, but check value is {}".format(check_value)
+            return False, "{} is None, but check value is {}".format(check_string,check_value)
         elif golden_value != None and check_value == None:
-            return False, "golden value is {}, but check value is None".format(golden_value)
+            return False, "{} is {}, but check value is None".format(check_string,golden_value)
 
         assert golden_value != None
         assert check_value != None
@@ -95,7 +95,7 @@ class RangePassRequirement(PassRequirement):
         try:
             golden_value = float(golden_value)
         except ValueError as e:
-            raise InspectError("Failed to convert golden value '{}' to float".format(golden_value))
+            raise InspectError("Failed to convert {} '{}' to float".format(check_string, golden_value))
         original_check_value = check_value
         try:
             check_value = float(check_value)
@@ -107,10 +107,10 @@ class RangePassRequirement(PassRequirement):
             if golden_value == check_value:
                 return True, "golden and check both equal 0"
             else:
-                return False, "unable to normalize relative value (golden value is zero)"
+                return False, "unable to normalize relative value ({} is zero)".format(check_string)
 
         elif original_check_value == original_golden_value:
-            return True, "Check value equal to golden value"
+            return True, "Check value equal to {}".format(check_string)
         
         else:
             
@@ -143,13 +143,13 @@ class RangeAbsPassRequirement(PassRequirement):
     def abs_threshold(self):
         return self._abs_threshold
 
-    def check_passed(self, golden_value, check_value):
+    def check_passed(self, golden_value, check_value, check_string = "golden value"):
         if golden_value == None and check_value == None:
-            return True, "both golden and check are None"
+            return True, "both {} and check are None".format(check_string)
         elif golden_value == None and check_value != None:
-            return False, "golden value is None, but check value is {}".format(check_value)
+            return False, "{} is None, but check value is {}".format(check_string, check_value)
         elif golden_value != None and check_value == None:
-            return False, "golden value is {}, but check value is None".format(golden_value)
+            return False, "{} is {}, but check value is None".format(check_string, golden_value)
 
         assert golden_value != None
         assert check_value != None
@@ -157,7 +157,7 @@ class RangeAbsPassRequirement(PassRequirement):
         try:
             golden_value = float(golden_value)
         except ValueError as e:
-            raise InspectError("Failed to convert golden value '{}' to float".format(golden_value))
+            raise InspectError("Failed to convert {} '{}' to float".format(check_string,golden_value))
 
         try:
             check_value = float(check_value)
@@ -167,9 +167,9 @@ class RangeAbsPassRequirement(PassRequirement):
         if golden_value == 0.: #Avoid division by zero
 
             if golden_value == check_value:
-                return True, "golden and check both equal 0"
+                return True, "{} and check both equal 0".format(check_string)
             else:
-                return False, "unable to normalize relative value (golden value is zero)"
+                return False, "unable to normalize relative value ({} is zero)".format(check_string)
 
         else:
             norm_check_value = check_value / golden_value
@@ -187,9 +187,11 @@ class ParseResults:
         return ("architecture", "circuit","script_params")
 
     def add_result(self, arch, circuit, parse_result, script_param = None):
+        script_param = load_script_param(script_param)
         self._metrics[(arch, circuit, script_param)] = parse_result
 
     def metrics(self, arch, circuit, script_param = None):
+        script_param = load_script_param(script_param)
         if (arch, circuit, script_param) in self._metrics:
             return self._metrics[(arch, circuit, script_param)]
         else:
@@ -198,6 +200,14 @@ class ParseResults:
     def all_metrics(self):
         return self._metrics
 
+def load_script_param(script_param):
+    if script_param and "common" not in script_param:
+        script_param = "common_" + script_param
+    if script_param:
+        script_param = script_param.replace(" ","_")
+    else:
+        script_param = "common"
+    return script_param
 
 def load_parse_patterns(parse_config_filepath):
     parse_patterns = OrderedDict()

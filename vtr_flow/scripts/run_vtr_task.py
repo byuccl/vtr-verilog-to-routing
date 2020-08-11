@@ -15,7 +15,7 @@ from run_vtr_flow import vtr_command_main as run_vtr_flow
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / 'python_libs'))
 
-from vtr import load_list_file, find_vtr_file, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, VERBOSITY_CHOICES, argparse_str2bool, get_next_run_dir, get_latest_run_dir, load_task_config, TaskConfig, find_task_config_file, CommandRunner, load_pass_requirements, load_parse_results, parse_vtr_flow
+from vtr import load_list_file, find_vtr_file, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, VERBOSITY_CHOICES, argparse_str2bool, get_next_run_dir, get_latest_run_dir, load_task_config, TaskConfig, find_task_config_file, CommandRunner, load_pass_requirements, load_parse_results, parse_vtr_flow, load_script_param
 from vtr.error import VtrError, InspectError, CommandError
 
 BASIC_VERBOSITY = 1
@@ -302,8 +302,17 @@ def check_golden_results_for_task(args, config):
         task_results = load_parse_results(task_results_filepath)
          
         #Load the golden reference
-        golden_results_filepath = str(PurePath(config.config_dir).joinpath("golden_results.txt"))
-        golden_results = load_parse_results(golden_results_filepath)
+        golden_results_filepath = None
+        golden_results = None
+        check_string = None
+        if config.second_parse_file:
+            golden_results_filepath = str(PurePath(config.config_dir).joinpath("parse_results_2.txt"))
+            golden_results = load_parse_results(golden_results_filepath)
+            check_string = "second parse file results"
+        else:
+            golden_results_filepath = str(PurePath(config.config_dir).joinpath("golden_results.txt"))
+            golden_results = load_parse_results(golden_results_filepath)
+            check_string = "golden results"
 
         #Verify that the architecture and circuit are specified
         for param in ["architecture", "circuit"]:
@@ -364,7 +373,7 @@ def check_golden_results_for_task(args, config):
                     continue
 
                 try:
-                    metric_passed, reason = pass_requirements[metric].check_passed(golden_metrics[metric], task_metrics[metric])
+                    metric_passed, reason = pass_requirements[metric].check_passed(golden_metrics[metric], task_metrics[metric], check_string)
                 except InspectError as e:
                     metric_passed = False
                     reason = e.msg
@@ -390,9 +399,7 @@ def create_jobs(args, configs):
             work_dir = str(PurePath(arch).joinpath(circuit))         
             run_dir = str(Path(get_next_run_dir(find_task_dir(args,config))) / work_dir)
             #Collect any extra script params from the config file
-            cmd = [abs_circuit_filepath, abs_arch_filepath]
-            cmd += ["-temp_dir", run_dir + "/common"]
-            
+            cmd = [abs_circuit_filepath, abs_arch_filepath]           
 
             if args.show_failures:
                 cmd += ["-show_failures"]
@@ -411,20 +418,18 @@ def create_jobs(args, configs):
             parse_cmd = None
             second_parse_cmd = None
             if config.parse_file:
-                parse_cmd = [run_dir+"/common", resolve_vtr_source_file(config, config.parse_file, str(PurePath("parse").joinpath("parse_config")))]
+                parse_cmd = [resolve_vtr_source_file(config, config.parse_file, str(PurePath("parse").joinpath("parse_config")))]
 
             if config.second_parse_file:
-                parse_cmd = [run_dir+"/common", resolve_vtr_source_file(config, config.second_parse_file, str(PurePath("parse").joinpath("parse_config")))]
+                second_parse_cmd = [resolve_vtr_source_file(config, config.second_parse_file, str(PurePath("parse").joinpath("parse_config")))]
             #We specify less verbosity to the sub-script
             # This keeps the amount of output reasonable
             if max(0, args.verbosity - 1):
                 cmd += ["-verbose"]
             if config.script_params_list_add:
                 for value in config.script_params_list_add:
-                    temp_dir = work_dir + "/common_{}".format(value.replace(" ", "_"))
-                    for string in cmd:
-                        if "\common" in string:
-                            string
+                    temp_dir = run_dir + "/common_{}".format(value.replace(" ", "_"))
+                    cmd += ["-temp_dir", temp_dir]
                     expected_min_W = ret_expected_min_W(circuit, arch, golden_results, value)
                     expected_min_W = int(expected_min_W * args.minw_hint_factor)
                     expected_min_W += expected_min_W % 2
@@ -433,8 +438,18 @@ def create_jobs(args, configs):
                     expected_vpr_status = ret_expected_vpr_status(arch, circuit, golden_results, value)
                     if (expected_vpr_status != "success" and expected_vpr_status != "Unknown"):
                         cmd += ["-expect_fail", expected_vpr_status]
-                    jobs.append(Job(config.task_name, arch, circuit, work_dir + "/common_{}".format(value.replace(" ", "_")), cmd + value.split(" "), parse_cmd, second_parse_cmd))
+                    current_parse_cmd = parse_cmd.copy()
+                    if config.parse_file:
+                        current_parse_cmd += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format(load_script_param(value))]
+                        current_parse_cmd.insert(0,run_dir+"/{}".format(load_script_param(value)))
+                    current_second_parse_cmd = second_parse_cmd.copy() if second_parse_cmd else None
+                    if config.second_parse_file:
+                        current_second_parse_cmd += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format(load_script_param(value))]
+                        current_second_parse_cmd.insert(0,run_dir+"/{}".format(load_script_param(value)))
+
+                    jobs.append(Job(config.task_name, arch, circuit, work_dir + "/{}".format(load_script_param(value)), cmd + value.split(" "), current_parse_cmd, current_second_parse_cmd))
             else:
+                cmd += ["-temp_dir", run_dir + "/common"]
                 expected_min_W = ret_expected_min_W(circuit, arch, golden_results)
                 expected_min_W = int(expected_min_W * args.minw_hint_factor)
                 expected_min_W += expected_min_W % 2
@@ -443,13 +458,16 @@ def create_jobs(args, configs):
                 expected_vpr_status = ret_expected_vpr_status(arch, circuit, golden_results)
                 if (expected_vpr_status != "success" and expected_vpr_status != "Unknown"):
                     cmd += ["-expect_fail", expected_vpr_status]
-                jobs.append(Job(config.task_name, arch, circuit, work_dir + "/common", cmd, parse_cmd, second_parse_cmd))
                 if config.parse_file:
                     parse_cmd += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format("common")]
+                    parse_cmd.insert(0,run_dir+"/common")
 
                 if config.second_parse_file:
-                    parse_cmd += []
+                    second_parse_cmd += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format("common")]
+                    second_parse_cmd.insert(0,run_dir+"/common")
 
+                jobs.append(Job(config.task_name, arch, circuit, work_dir + "/common", cmd, parse_cmd, second_parse_cmd))
+                
     return jobs
 
 def find_latest_run_dir(args, config):
@@ -477,22 +495,14 @@ def find_task_dir(args, config):
     return str(task_dir)
 
 def ret_expected_min_W(circuit, arch, golden_results, script_params=None):
-    if script_params and "common" not in script_params:
-        script_params = "common_" + script_params
-    if script_params:
-        script_params = script_params.replace(" ","_")
+    script_params = load_script_param(script_params)
     golden_metrics = golden_results.metrics(arch,circuit,script_params)
     if golden_metrics and "min_chan_width" in golden_metrics:
         return int(golden_metrics["min_chan_width"])
     return -1
 
 def ret_expected_vpr_status(arch, circuit, golden_results, script_params=None):
-    if script_params and "common" not in script_params:
-        script_params = "common_" + script_params
-    if script_params:
-        script_params = script_params.replace(" ","_")
-    else:
-        script_params = "common"
+    script_params = load_script_param(script_params)
     golden_metrics = golden_results.metrics(arch,circuit,script_params)
     if not golden_metrics or 'vpr_status' not in golden_metrics :
         return "Unknown"
@@ -657,7 +667,7 @@ def parse_tasks(args, configs, jobs):
         config_jobs = [job for job in jobs if job.task_name() == config.task_name]
         parse_task(args, config, config_jobs)
 
-def parse_task(args, config, config_jobs, task_metrics_filepath=None, flow_metrics_basename="parse_results.txt"):
+def parse_task(args, config, config_jobs, flow_metrics_basename="parse_results.txt"):
     """
     Parse a single task run.
 
@@ -667,9 +677,6 @@ def parse_task(args, config, config_jobs, task_metrics_filepath=None, flow_metri
     run_dir = find_latest_run_dir(args, config)
     
     print_verbose(BASIC_VERBOSITY, args.verbosity, "Parsing task run {}".format(run_dir))
-    
-    if task_metrics_filepath is None:
-        task_metrics_filepath = task_parse_results_filepath = str(PurePath(run_dir).joinpath("parse_results.txt"))
 
     #Record max widths for pretty printing
     max_arch_len = len("architecture")
@@ -688,7 +695,13 @@ def parse_task(args, config, config_jobs, task_metrics_filepath=None, flow_metri
                                 parse_vtr_flow(job.second_parse_command())
         max_arch_len = max(max_arch_len, len(job.arch()))
         max_circuit_len = max(max_circuit_len, len(job.circuit()))
+    parse_files(config_jobs,run_dir,flow_metrics_basename)
+    if config.second_parse_file:
+        parse_files(config_jobs,run_dir,"parse_results_2.txt")
         
+    
+def parse_files(config_jobs, run_dir, flow_metrics_basename="parse_results.txt"):
+    task_parse_results_filepath = str(PurePath(run_dir) / flow_metrics_basename)
     with open(task_parse_results_filepath, "w") as out_f:
 
         #Start the header
@@ -712,7 +725,6 @@ def parse_task(args, config, config_jobs, task_metrics_filepath=None, flow_metri
                     print(lines[1], file = out_f, end="")
             else:
                 print_verbose(BASIC_VERBOSITY, args.verbosity, "Warning: Flow result file not found (task QoR will be incomplete): {} ".format(str(job_parse_results_filepath)))
-
 
 if __name__ == "__main__":
     main()
