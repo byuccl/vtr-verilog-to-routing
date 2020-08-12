@@ -415,6 +415,9 @@ def create_jobs(args, configs):
             if config.pad_file:
                 cmd += ["--fix_pins", resolve_vtr_source_file(config, config.pad_file)]
             
+            if config.sdc_dir:
+                cmd += ["-sdc_file","{}/{}.sdc".format(config.sdc_dir, Path(circuit).stem)]
+            
             parse_cmd = None
             second_parse_cmd = None
             if config.parse_file:
