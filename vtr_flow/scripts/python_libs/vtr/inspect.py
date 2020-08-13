@@ -179,7 +179,7 @@ class RangeAbsPassRequirement(PassRequirement):
         if original_check_value == original_golden_value:
             return True, "Check value equal to {}".format(check_string)
 
-        if (self.min_value() <= norm_check_value <= self.max_value()) or abs(check_value - golden_value) < self.abs_threshold():
+        if (self.min_value() <= norm_check_value <= self.max_value()) or abs(check_value - golden_value) <= self.abs_threshold():
             return True, "relative value within range"
         else:
             return False, "relative value {} outside of range [{},{}] and above absolute threshold {}".format(norm_check_value, self.min_value(), self.max_value(),self.abs_threshold())
