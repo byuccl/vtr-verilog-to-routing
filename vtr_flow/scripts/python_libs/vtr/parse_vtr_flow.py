@@ -80,7 +80,7 @@ def parse_vtr_flow(arg_list):
             metrics[parse_pattern.name()] = "-1"
             with open(filepath,"r") as file:
                 for line in file:
-                    if line[0] == "#":
+                    while line[0] == "#":
                         line = line[1:]
                     match = parse_pattern.regex().match(line)
                     if match and match.groups():

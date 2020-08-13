@@ -102,24 +102,26 @@ class RangePassRequirement(PassRequirement):
         except ValueError as e:
             raise InspectError("Failed to convert check value '{}' to float".format(check_value))
 
+        norm_check_value = None
         if golden_value == 0.: #Avoid division by zero
 
             if golden_value == check_value:
                 return True, "golden and check both equal 0"
             else:
-                golden_value = float("inf")
+                norm_check_value = float("inf")
+        else:
+            norm_check_value = check_value / golden_value
 
         if original_check_value == original_golden_value:
             return True, "Check value equal to {}".format(check_string)
         
         else:
-            
-            norm_check_value = check_value / golden_value
 
             if self.min_value() <= norm_check_value <= self.max_value():
                 return True, "relative value within range"
             else:
                 return False, "relative value {} outside of range [{},{}]".format(norm_check_value, self.min_value(), self.max_value())
+
 class RangeAbsPassRequirement(PassRequirement):
 
     def __init__(self, metric, min_value=None, max_value=None,abs_threshold=None):
@@ -153,32 +155,35 @@ class RangeAbsPassRequirement(PassRequirement):
 
         assert golden_value != None
         assert check_value != None
-
+        original_golden_value = golden_value
         try:
             golden_value = float(golden_value)
         except ValueError as e:
             raise InspectError("Failed to convert {} '{}' to float".format(check_string,golden_value))
-
+        original_check_value = check_value
         try:
             check_value = float(check_value)
         except ValueError as e:
             raise InspectError("Failed to convert check value '{}' to float".format(check_value))
-
+        norm_check_value = None
         if golden_value == 0.: #Avoid division by zero
 
             if golden_value == check_value:
                 return True, "{} and check both equal 0".format(check_string)
             else:
-                golden_value = float("inf")
-
+                norm_check_value = float("inf")
         
-        norm_check_value = check_value / golden_value
+        else:
+            norm_check_value = check_value / golden_value
 
-        if (self.min_value() <= norm_check_value <= self.max_value()) or abs(norm_check_value) < self.abs_threshold():
+        if original_check_value == original_golden_value:
+            return True, "Check value equal to {}".format(check_string)
+
+        if (self.min_value() <= norm_check_value <= self.max_value()) or abs(check_value - golden_value) < self.abs_threshold():
             return True, "relative value within range"
         else:
             return False, "relative value {} outside of range [{},{}] and above absolute threshold {}".format(norm_check_value, self.min_value(), self.max_value(),self.abs_threshold())
-
+ 
 class ParseResults:
     def __init__(self):
         self._metrics = OrderedDict()

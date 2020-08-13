@@ -550,10 +550,14 @@ def run_parallel(args, configs, queued_jobs):
                 Path(work_dir).mkdir(parents=True, exist_ok=True)
                 log_filepath = str(PurePath(work_dir) / "vtr_flow.log")
                 proc = None
+                vtr_flow_out = str(PurePath(work_dir) / "vtr_flow.out")
                 with open(log_filepath, 'w+') as log_file:
-                    #print "Starting {}: {}".format(job.task_name(), job.job_name())
-                    #print job.command()
-                    proc = run_vtr_flow(job.run_command(), find_vtr_file("run_vtr_flow.py"))
+                    with open(vtr_flow_out, 'w+') as out_file:
+                        with redirect_stdout(out_file):
+                            proc = run_vtr_flow(job.run_command(), find_vtr_file("run_vtr_flow.py"))
+                    with open(vtr_flow_out, "r") as out_file:
+                        for line in out_file.readlines():
+                            print(line,end="")
                 running_procs.append((proc, job, log_file))
             while len(running_procs) > 0:
                 #Are any of the workers finished?
@@ -585,7 +589,7 @@ def run_parallel(args, configs, queued_jobs):
                     assert len(running_procs) < args.j
 
                     #There are idle workers, allow new jobs to start
-                    break;
+                    break
 
                 #Don't constantly poll
                 time.sleep(0.1)
