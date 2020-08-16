@@ -274,6 +274,7 @@ def check_tasks_qor(args, task_lists):
         "-v",
         str(max(0, args.verbosity - 1)),
         "--check_golden",
+        "-calc_geomean",
         "--print_metadata",
         str(args.debug),
     ]

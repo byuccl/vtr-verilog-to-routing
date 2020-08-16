@@ -15,7 +15,7 @@ from run_vtr_flow import vtr_command_main as run_vtr_flow
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / 'python_libs'))
 
-from vtr import load_list_file, find_vtr_file, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, VERBOSITY_CHOICES, argparse_str2bool, get_next_run_dir, get_latest_run_dir, load_task_config, TaskConfig, find_task_config_file, CommandRunner, load_pass_requirements, load_parse_results, parse_vtr_flow, load_script_param
+from vtr import load_list_file, find_vtr_file, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, VERBOSITY_CHOICES, argparse_str2bool, get_next_run_dir, get_latest_run_dir, load_task_config, TaskConfig, find_task_config_file, CommandRunner, load_pass_requirements, load_parse_results, parse_vtr_flow, load_script_param, get_latest_run_number
 from vtr.error import VtrError, InspectError, CommandError
 
 BASIC_VERBOSITY = 1
@@ -24,13 +24,14 @@ ALL_LOG_VERBOSITY = 4
 
 class Job:
 
-    def __init__(self, task_name, arch, circuit, work_dir, run_command, parse_command, second_parse_command):
+    def __init__(self, task_name, arch, circuit, work_dir, run_command, parse_command, second_parse_command, qor_parse_command):
         self._task_name = task_name
         self._arch = arch
         self._circuit = circuit
         self._run_command = run_command
         self._parse_command = parse_command
         self._second_parse_command = second_parse_command
+        self._qor_parse_command = qor_parse_command
         self._work_dir = work_dir
 
     def task_name(self):
@@ -53,6 +54,9 @@ class Job:
 
     def second_parse_command(self):
         return self._second_parse_command
+    
+    def qor_parse_command(self):
+        return self._qor_parse_command
         
     def work_dir(self, run_dir):
         return str(PurePath(run_dir).joinpath(self._work_dir))
@@ -160,6 +164,15 @@ def vtr_command_argparser(prog=None):
                         default=None,
                         help="Directory to store intermediate and result files."
                              "If None, set to the relevant directory under $VTR_ROOT/vtr_flow/tasks.")
+    
+    parser.add_argument("-revision",
+                        default="",
+                        help="Revision number")
+
+    parser.add_argument("-calc_geomean",
+                        default=False,
+                        action="store_true",
+                        help="QoR geomeans are not computed by default")
 
     parser.add_argument("--print_metadata",
                         default=True,
@@ -248,6 +261,10 @@ def run_tasks(args, configs):
         if args.check_golden:
             print_verbose(BASIC_VERBOSITY, args.verbosity, "")
             num_failed += check_golden_results_for_tasks(args, configs)
+        
+        if args.calc_geomean:
+            summarize_qor(args, configs)
+            calc_geomean(args, configs)
 
     else:
         raise VtrError("Unrecognized run system {system}".format(system=args.system))
@@ -294,98 +311,98 @@ def check_golden_results_for_task(args, config):
     else:
 
         #Load the pass requirements file
-        pass_req_filepath = str(PurePath(find_vtr_root()) / 'vtr_flow' / 'parse' / 'pass_requirements'/ config.pass_requirements_file)
-        pass_requirements = load_pass_requirements(pass_req_filepath)
 
         #Load the task's parse results
         task_results_filepath = str(PurePath(run_dir).joinpath("parse_results.txt"))
         task_results = load_parse_results(task_results_filepath)
          
         #Load the golden reference
-        golden_results_filepath = None
-        golden_results = None
-        check_string = None
         if config.second_parse_file:
-            golden_results_filepath = str(PurePath(config.config_dir).joinpath("parse_results_2.txt"))
-            golden_results = load_parse_results(golden_results_filepath)
+            second_results_filepath = str(PurePath(config.config_dir).joinpath("parse_results_2.txt"))
+            second_results = load_parse_results(second_results_filepath)
+            num_qor_failures = check_two_files(args, config, run_dir, task_results, task_results_filepath, second_results, second_results_filepath,  second_name = "second parse file")
+            
             check_string = "second parse file results"
         else:
             golden_results_filepath = str(PurePath(config.config_dir).joinpath("golden_results.txt"))
             golden_results = load_parse_results(golden_results_filepath)
-            check_string = "golden results"
-
-        #Verify that the architecture and circuit are specified
-        for param in ["architecture", "circuit"]:
-            if param not in task_results.primary_keys():
-                raise InspectError("Required param '{}' missing from task results: {}".format(param, task_results_filepath), task_results_filepath)
-
-            if param not in golden_results.primary_keys():
-                raise InspectError("Required param '{}' missing from golden results: {}".format(param, golden_results_filepath), golden_results_filepath)
-
-        #Verify that all params and pass requirement metric are included in both the golden and task results
-        # We do not worry about non-pass_requriements elements being different or missing
-        for metric in pass_requirements.keys():
-            for (arch, circuit, script_params), result in task_results.all_metrics().items():
-                if metric not in result:
-                    #print_verbose(BASIC_VERBOSITY, args.verbosity,
-                        #"Warning: Required metric '{}' missing from task results".format(metric), task_results_filepath) 
-                    raise InspectError("Required metric '{}' missing from task results".format(metric), task_results_filepath) 
-
-            for (arch, circuit, script_params), result in golden_results.all_metrics().items():
-                if metric not in result:
-                    #print_verbose(BASIC_VERBOSITY, args.verbosity,
-                        #"Warning: Required metric '{}' missing from golden results".format(metric), golden_results_filepath) 
-                    raise InspectError("Required metric '{}' missing from golden results".format(metric), golden_results_filepath) 
-
-        #Load the primary keys for golden and task
-        golden_primary_keys = []
-        for (arch, circuit, script_params), metrics in golden_results.all_metrics().items():
-            golden_primary_keys.append((arch, circuit,script_params))
-
-        task_primary_keys = []
-        for (arch, circuit,script_params), metrics in task_results.all_metrics().items():
-            task_primary_keys.append((arch, circuit,script_params))
-
-        #Ensure that task has all the golden cases
-        for arch, circuit, script_params in golden_primary_keys:
-            if task_results.metrics(arch, circuit,script_params) == None:
-                raise InspectError("Required case {}/{} missing from task results: {}".format(arch, circuit, task_results_filepath))
-    
-        #Warn about any elements in task that are not found in golden
-        for arch, circuit, script_params in task_primary_keys:
-            if golden_results.metrics(arch, circuit,script_params) == None:
-                print_verbose(BASIC_VERBOSITY, args.verbosity,
-                             "Warning: Task includes result for {}/{} missing in golden results".format(arch, circuit))
-
-        #Verify that task results pass each metric for all cases in golden
-        for (arch, circuit, script_params) in golden_primary_keys:
-            golden_metrics = golden_results.metrics(arch, circuit, script_params)
-            task_metrics = task_results.metrics(arch, circuit, script_params)
-
-            for metric in pass_requirements.keys():
-
-                if not metric in golden_metrics:
-                    print_verbose(BASIC_VERBOSITY, args.verbosity, "Warning: Metric {} missing from golden results".format(metric))
-                    continue
-
-                if not metric in task_metrics:
-                    print_verbose(BASIC_VERBOSITY, args.verbosity, "Warning: Metric {} missing from task results".format(metric))
-                    continue
-
-                try:
-                    metric_passed, reason = pass_requirements[metric].check_passed(golden_metrics[metric], task_metrics[metric], check_string)
-                except InspectError as e:
-                    metric_passed = False
-                    reason = e.msg
-
-                if not metric_passed:
-                    print_verbose(BASIC_VERBOSITY, args.verbosity, "    FAILED {} {} {}/{}: {} {}".format(PurePath(run_dir).name, config.task_name, arch, circuit, metric, reason))
-                    num_qor_failures += 1
+            num_qor_failures = check_two_files(args, config, run_dir, task_results, task_results_filepath, golden_results, golden_results_filepath)
+        
+        
 
     if num_qor_failures == 0:
         print_verbose(BASIC_VERBOSITY, args.verbosity, 
                       "    PASSED {} {}".format(PurePath(run_dir).name, config.task_name))
 
+    return num_qor_failures
+
+def check_two_files(args, config, run_dir, first_results, first_results_filepath, second_results, second_results_filepath, first_name = "task", second_name = "golden"):
+    #Verify that the architecture and circuit are specified
+    for param in ["architecture", "circuit", "script_params"]:
+        if param not in first_results.primary_keys():
+            raise InspectError("Required param '{}' missing from {} results: {}".format(param, first_name, first_results_filepath), first_results_filepath)
+
+        if param not in second_results.primary_keys():
+            raise InspectError("Required param '{}' missing from {} results: {}".format(param, second_first, second_results_filepath), second_results_filepath)
+
+    #Verify that all params and pass requirement metric are included in both the  result files
+    # We do not worry about non-pass_requriements elements being different or missing
+    pass_req_filepath = str(PurePath(find_vtr_root()) / 'vtr_flow' / 'parse' / 'pass_requirements'/ config.pass_requirements_file)
+    pass_requirements = load_pass_requirements(pass_req_filepath)
+
+    for metric in pass_requirements.keys():
+        for (arch, circuit, script_params), result in first_results.all_metrics().items():
+            if metric not in result:
+                raise InspectError("Required metric '{}' missing from {} results".format(metric, first_name), first_results_filepath) 
+
+        for (arch, circuit, script_params), result in second_results.all_metrics().items():
+            if metric not in result:
+                raise InspectError("Required metric '{}' missing from {} results".format(metric, second_name), second_results_filepath) 
+
+    #Load the primary keys for result files
+    second_primary_keys = []
+    for (arch, circuit, script_params), metrics in second_results.all_metrics().items():
+        second_primary_keys.append((arch, circuit,script_params))
+
+    first_primary_keys = []
+    for (arch, circuit,script_params), metrics in first_results.all_metrics().items():
+        first_primary_keys.append((arch, circuit,script_params))
+
+    #Ensure that first result file  has all the second result file cases
+    for arch, circuit, script_params in second_primary_keys:
+        if first_results.metrics(arch, circuit,script_params) == None:
+            raise InspectError("Required case {}/{} missing from {} results: {}".format(arch, circuit, first_name, first_results_filepath))
+
+    #Warn about any elements in first result file that are not found in second result file
+    for arch, circuit, script_params in first_primary_keys:
+        if second_results.metrics(arch, circuit,script_params) == None:
+            print_verbose(BASIC_VERBOSITY, args.verbosity,
+                            "Warning: {} includes result for {}/{} missing in {} results".format(first_name, arch, circuit, second_name))
+    num_qor_failures = 0
+    #Verify that the first results pass each metric for all cases in the second results 
+    for (arch, circuit, script_params) in second_primary_keys:
+        second_metrics = second_results.metrics(arch, circuit, script_params)
+        first_metrics = first_results.metrics(arch, circuit, script_params)
+
+        for metric in pass_requirements.keys():
+
+            if not metric in second_metrics:
+                print_verbose(BASIC_VERBOSITY, args.verbosity, "Warning: Metric {} missing from {} results".format(metric, second_name))
+                continue
+
+            if not metric in first_metrics:
+                print_verbose(BASIC_VERBOSITY, args.verbosity, "Warning: Metric {} missing from {} results".format(metric, first_name))
+                continue
+
+            try:
+                metric_passed, reason = pass_requirements[metric].check_passed(second_metrics[metric], first_metrics[metric], second_name)
+            except InspectError as e:
+                metric_passed = False
+                reason = e.msg
+
+            if not metric_passed:
+                print_verbose(BASIC_VERBOSITY, args.verbosity, "    FAILED {} {} {}/{}: {} {}".format(PurePath(run_dir).name, config.task_name, arch, circuit, metric, reason))
+                num_qor_failures += 1
     return num_qor_failures
 
 def create_jobs(args, configs):
@@ -420,11 +437,15 @@ def create_jobs(args, configs):
             
             parse_cmd = None
             second_parse_cmd = None
+            qor_parse_command = None
             if config.parse_file:
                 parse_cmd = [resolve_vtr_source_file(config, config.parse_file, str(PurePath("parse").joinpath("parse_config")))]
 
             if config.second_parse_file:
                 second_parse_cmd = [resolve_vtr_source_file(config, config.second_parse_file, str(PurePath("parse").joinpath("parse_config")))]
+            
+            if config.qor_parse_file:
+                qor_parse_command = [resolve_vtr_source_file(config, config.qor_parse_file, str(PurePath("parse").joinpath("qor_config")))]
             #We specify less verbosity to the sub-script
             # This keeps the amount of output reasonable
             if max(0, args.verbosity - 1):
@@ -442,15 +463,22 @@ def create_jobs(args, configs):
                     if (expected_vpr_status != "success" and expected_vpr_status != "Unknown"):
                         cmd += ["-expect_fail", expected_vpr_status]
                     current_parse_cmd = parse_cmd.copy()
+                    
                     if config.parse_file:
                         current_parse_cmd += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format(load_script_param(value))]
                         current_parse_cmd.insert(0,run_dir+"/{}".format(load_script_param(value)))
                     current_second_parse_cmd = second_parse_cmd.copy() if second_parse_cmd else None
+                    
                     if config.second_parse_file:
                         current_second_parse_cmd += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format(load_script_param(value))]
                         current_second_parse_cmd.insert(0,run_dir+"/{}".format(load_script_param(value)))
+                    current_qor_parse_command = qor_parse_command.copy() if qor_parse_command else None
 
-                    jobs.append(Job(config.task_name, arch, circuit, work_dir + "/{}".format(load_script_param(value)), cmd + value.split(" "), current_parse_cmd, current_second_parse_cmd))
+                    if config.qor_parse_file:
+                        current_qor_parse_command += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format("common")]
+                        current_qor_parse_command.insert(0,run_dir+"/{}".format(load_script_param(value)))
+
+                    jobs.append(Job(config.task_name, arch, circuit, work_dir + "/{}".format(load_script_param(value)), cmd + value.split(" "), current_parse_cmd, current_second_parse_cmd, current_qor_parse_command))
             else:
                 cmd += ["-temp_dir", run_dir + "/common"]
                 expected_min_W = ret_expected_min_W(circuit, arch, golden_results)
@@ -467,11 +495,82 @@ def create_jobs(args, configs):
 
                 if config.second_parse_file:
                     second_parse_cmd += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format("common")]
-                    second_parse_cmd.insert(0,run_dir+"/common")
+                    second_parse_cmd.insert(0,run_dir+"/common")\
 
-                jobs.append(Job(config.task_name, arch, circuit, work_dir + "/common", cmd, parse_cmd, second_parse_cmd))
+                if config.qor_parse_file:
+                    qor_parse_command += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format("common")]
+                    qor_parse_command.insert(0,run_dir+"/common")
+
+                jobs.append(Job(config.task_name, arch, circuit, work_dir + "/common", cmd, parse_cmd, second_parse_cmd, qor_parse_command))
                 
     return jobs
+
+def summarize_qor(args, configs):
+    first = True 
+    task_path = Path(configs[0].config_dir).parent
+    output_path = task_path
+    if len(configs) > 1 or (task_path.parent / "task_list.txt").is_file():
+        output_path = task_path.parent
+    output_path = output_path / "task_summary"
+    output_path.mkdir(exist_ok=True)
+    out_file = output_path / (str(Path(find_latest_run_dir(args, configs[0])).stem) + "_summary.txt")
+    with out_file.open("w+") as out:
+        for config in configs:
+            with (Path(find_latest_run_dir(args, config)) / "qor_results.txt").open("r") as in_file:
+                headers = in_file.readline()
+                if first:
+                    print("task_name \t{}".format(headers), file = out, end="")
+                    first = False
+                for line in in_file:
+                    print("{}\t{}".format(config.task_name,line), file = out, end="")
+
+def calc_geomean(args, configs):
+    first = False 
+    task_path = Path(configs[0].config_dir).parent
+    output_path = task_path
+    if len(configs) > 1 or (task_path.parent / "task_list.txt").is_file():
+        output_path = task_path.parent
+    out_file = output_path /  "qor_geomean.txt"
+    if not out_file.is_file():
+        first = True
+    summary_file = output_path / "task_summary" / (str(Path(find_latest_run_dir(args, configs[0])).stem) + "_summary.txt")
+
+    with out_file.open("w" if first else "a") as out:
+        with summary_file.open("r") as summary:
+            header = summary.readline().strip()
+            params = header.split("\t")[4:]
+            if first:
+                print("run",file=out,end="\t")
+                for param in params:
+                    print(param,file=out,end="\t")
+                print("date\trevision",file=out)
+                first = False
+            lines = summary.readlines()
+            printint(get_latest_run_number(str(Path(configs[0].config_dir).parent)),file=out,end="\t")
+            for index in range(len(params)):
+                geo_mean = 1
+                num = 0
+                previous_value = None
+                for line in lines:
+                    line = line.split("\t")[4:]
+                    current_value = line[index]
+                    try:
+                        if float(current_value) > 0:
+                            geo_mean *= float(current_value)
+                            num+=1
+                    except ValueError:
+                        if not previous_value:
+                            previous_value = current_value
+                        elif current_value != previous_value:
+                            previous_value = "-1"
+                if num:
+                    geo_mean **= 1/num
+                    print(geo_mean,file=out,end="\t")
+                else:
+                    print(previous_value if previous_value is not None else "-1",file=out,end="\t")
+        print(datetime.date(datetime.now()),file=out,end="\t")
+        print(args.revision,file=out)
+
 
 def find_latest_run_dir(args, config):
     task_dir = find_task_dir(args, config)
@@ -700,11 +799,20 @@ def parse_task(args, config, config_jobs, flow_metrics_basename="parse_results.t
                         with open(parse_filepath, 'w+') as parse_file:
                             with redirect_stdout(parse_file):
                                 parse_vtr_flow(job.second_parse_command())
+        if job.qor_parse_command():
+                        parse_filepath = str(PurePath(work_dir) / "qor_results.txt")
+                        with open(parse_filepath, 'w+') as parse_file:
+                            with redirect_stdout(parse_file):
+                                parse_vtr_flow(job.qor_parse_command())
         max_arch_len = max(max_arch_len, len(job.arch()))
         max_circuit_len = max(max_circuit_len, len(job.circuit()))
     parse_files(config_jobs,run_dir,flow_metrics_basename)
+
     if config.second_parse_file:
         parse_files(config_jobs,run_dir,"parse_results_2.txt")
+
+    if config.qor_parse_file:
+        parse_files(config_jobs,run_dir,"qor_results.txt")
         
     
 def parse_files(config_jobs, run_dir, flow_metrics_basename="parse_results.txt"):

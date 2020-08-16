@@ -17,6 +17,7 @@ from .util import (
     argparse_str2bool,
     get_next_run_dir,
     get_latest_run_dir,
+    get_latest_run_number,
     verify_file,
 )
 from .inspect import determine_lut_size, determine_min_w, determine_memory_addr_width, load_parse_patterns, load_pass_requirements, load_parse_results, load_script_param
