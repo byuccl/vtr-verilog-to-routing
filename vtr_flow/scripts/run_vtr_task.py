@@ -110,25 +110,25 @@ def vtr_command_argparser(prog=None):
                         metavar="TASK_LIST_FILE",
                         help="A file listing tasks to be run")
 
-    parser.add_argument("--parse",
+    parser.add_argument("-parse",
                         default=False,
                         action="store_true",
                         dest="parse",
                         help="Perform only parsing on the latest task run")
 
-    parser.add_argument("--create_golden",
+    parser.add_argument("-create_golden",
                         default=False,
                         action="store_true",
                         dest="create_golden",
                         help="Update or create golden results for the specified task")
 
-    parser.add_argument("--check_golden",
+    parser.add_argument("-check_golden",
                         default=False,
                         action="store_true",
                         dest="check_golden",
                         help="Check the latest task run against golden results")
 
-    parser.add_argument('--system',
+    parser.add_argument('-system',
                         choices=['local'],
                         default='local',
                         help="What system to run the tasks on.")
@@ -144,7 +144,7 @@ def vtr_command_argparser(prog=None):
                         metavar="NUM_PROC",
                         help="How many processors to use for execution.")
 
-    parser.add_argument('--timeout',
+    parser.add_argument('-timeout',
                         default=30*24*60*60, #30 days
                         metavar="TIMEOUT_SECONDS",
                         help="Time limit for this script.")
@@ -174,7 +174,7 @@ def vtr_command_argparser(prog=None):
                         action="store_true",
                         help="QoR geomeans are not computed by default")
 
-    parser.add_argument("--print_metadata",
+    parser.add_argument("-print_metadata",
                         default=True,
                         type=argparse_str2bool,
                         help="Print meta-data like command-line arguments and run-time")
@@ -191,7 +191,7 @@ def vtr_command_main(arg_list, prog=None):
     args = vtr_command_argparser(prog).parse_args(arg_list)
 
     args.run = True
-    if args.parse or args.create_golden or args.check_golden:
+    if args.parse or args.create_golden or args.check_golden or args.calc_geomean:
         #Don't run if parsing or handling golden results
         args.run = False
 
@@ -546,7 +546,7 @@ def calc_geomean(args, configs):
                 print("date\trevision",file=out)
                 first = False
             lines = summary.readlines()
-            printint(get_latest_run_number(str(Path(configs[0].config_dir).parent)),file=out,end="\t")
+            print(get_latest_run_number(str(Path(configs[0].config_dir).parent)),file=out,end="\t")
             for index in range(len(params)):
                 geo_mean = 1
                 num = 0

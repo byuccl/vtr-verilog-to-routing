@@ -88,6 +88,12 @@ def vtr_command_argparser(prog=None):
         action="store_true",
         help="Create golden reference results for the associated tasks",
     )
+    parser.add_argument(
+        "-parse",
+        default=False,
+        action="store_true",
+        help="Only run the parse tests.",
+    )
 
     parser.add_argument(
         "-skip_qor",
@@ -117,7 +123,14 @@ def vtr_command_argparser(prog=None):
         "--work_dir",
         default=None,
         help="Directory to store intermediate and result files."
-        "If None, set to the relevante directory under $VTR_ROOT/vtr_flow/tasks.",
+        "If None, set to the relevant directory under $VTR_ROOT/vtr_flow/tasks.",
+    )
+
+    parser.add_argument(
+        "-calc_geomean",
+        default=False,
+        action="store_true",
+        help="Enable the calculation of the task geomeans.",
     )
 
     parser.add_argument(
@@ -153,10 +166,16 @@ def vtr_command_main(arg_list, prog=None):
     num_qor_failures = 0
 
     try:
-        if args.create_golden:
+        if args.parse:
+            num_qor_failures = parse_single_test(args, collect_task_list(args))
+        elif args.create_golden:
             # Create golden results
             num_qor_failures = 0
-            create_tasks_golden_result(args, vtr_task_list_files)
+            parse_single_test(args, collect_task_list(args), check = False, calculate = False, create = True)
+        elif args.calc_geomean:
+            # Calculate geo mean values
+            num_qor_failures = 0
+            parse_single_test(args, collect_task_list(args), check = False, calculate = True)
         else:
             # Run any ODIN tests
             for reg_test in args.reg_test:
@@ -164,25 +183,14 @@ def vtr_command_main(arg_list, prog=None):
                     num_func_failures += run_odin_test(args, reg_test)
 
             # Collect the task lists
-            vtr_task_list_files = []
-            for reg_test in args.reg_test:
-                if reg_test.startswith("vtr"):
-                    task_list_filepath = str(
-                        Path(find_vtr_root())
-                        / "vtr_flow"
-                        / "tasks"
-                        / "regression_tests"
-                        / reg_test
-                        / "task_list.txt"
-                    )
-                    vtr_task_list_files.append(task_list_filepath)
+            vtr_task_list_files = collect_task_list(args)
 
             # Run the actual tasks, recording functionality failures
             num_func_failures += run_tasks(args, vtr_task_list_files)
 
             # Check against golden results
             if not args.skip_qor:
-                num_qor_failures += check_tasks_qor(args, vtr_task_list_files)
+                num_qor_failures += parse_single_test(args, vtr_task_list_files)
 
         # Final summary
         print_verbose(BASIC_VERBOSITY, args.verbosity, "")
@@ -243,6 +251,20 @@ def run_odin_test(args, test_name):
     print_verbose(BASIC_VERBOSITY, args.verbosity, "PASSED test '{}'".format(test_name))
     return 0
 
+def collect_task_list(args):
+    vtr_task_list_files = []
+    for reg_test in args.reg_test:
+        if reg_test.startswith("vtr"):
+            task_list_filepath = str(
+                Path(find_vtr_root())
+                / "vtr_flow"
+                / "tasks"
+                / "regression_tests"
+                / reg_test
+                / "task_list.txt"
+            )
+            vtr_task_list_files.append(task_list_filepath)
+    return vtr_task_list_files
 
 def run_tasks(args, task_lists):
     # Call 'vtr task'
@@ -256,7 +278,7 @@ def run_tasks(args, task_lists):
         str(args.j),
         "-v",
         str(max(0, args.verbosity - 1)),
-        "--print_metadata",
+        "-print_metadata",
         str(args.debug),
     ]
     if args.show_failures:
@@ -268,39 +290,25 @@ def run_tasks(args, task_lists):
     return run_vtr_task(vtr_task_cmd)
 
 
-def check_tasks_qor(args, task_lists):
+def parse_single_test(args, task_lists, check=True, calculate=True, create=False):
     vtr_task_cmd = ["-l"] + task_lists
     vtr_task_cmd += [
         "-v",
         str(max(0, args.verbosity - 1)),
-        "--check_golden",
-        "-calc_geomean",
-        "--print_metadata",
+        "-print_metadata",
         str(args.debug),
     ]
+    if check:
+        vtr_task_cmd += ["-check_golden"]
+    if calculate:
+        vtr_task_cmd += ["-calc_geomean"]
+    if create:
+        vtr_task_cmd += ["-create_golden"]
     if args.work_dir:
         vtr_task_cmd += ["--work_dir", args.workdir]
 
     # Exit code is number of failures
     return run_vtr_task(vtr_task_cmd)
-
-
-def create_tasks_golden_result(args, task_lists):
-    vtr_task_cmd = ["vtr", "task"]
-    vtr_task_cmd += ["-l"] + task_lists
-    vtr_task_cmd += [
-        "-v",
-        str(max(0, args.verbosity - 1)),
-        "--create_golden",
-        "--print_metadata",
-        str(args.debug),
-    ]
-    if args.work_dir:
-        vtr_task_cmd += ["--work_dir", args.workdir]
-
-    # Exit code is number of failures
-    return subprocess.call(vtr_task_cmd)
-
 
 if __name__ == "__main__":
     main()
