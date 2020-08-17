@@ -11,6 +11,7 @@ import shutil
 from datetime import datetime
 from multiprocessing import Pool
 from contextlib import redirect_stdout
+from multiprocessing import Process, Queue, Pool, Manager
 from run_vtr_flow import vtr_command_main as run_vtr_flow
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / 'python_libs'))
@@ -248,7 +249,7 @@ def run_tasks(args, configs):
         jobs = create_jobs(args, configs)
 
         if args.run:
-            num_failed = run_parallel(args, configs, jobs)
+            num_failed = run_parallel_test(args, configs, jobs)
 
         if args.parse:
             print_verbose(BASIC_VERBOSITY, args.verbosity, "")
@@ -710,6 +711,61 @@ def run_parallel(args, configs, queued_jobs):
                 log_file.close()
 
     return num_failed
+
+def run_parallel_test(args, configs, queued_jobs):
+    """
+    Run each external command in commands with at most args.j commands running in parllel
+    """
+    #Determine the run dir for each config
+    run_dirs = {}
+    for config in configs:
+        task_dir = find_task_dir(args, config)
+        task_run_dir = get_next_run_dir(task_dir)
+        run_dirs[config.task_name] = task_run_dir
+
+
+    #We pop off the jobs of queued_jobs, which python does from the end,
+    #so reverse the list now so we get the expected order. This also ensures
+    #we are working with a copy of the jobs
+    queued_jobs = list(reversed(queued_jobs))
+    #Find the max taskname length for pretty printing
+    max_taskname_len = 0
+    for job in queued_jobs:
+        max_taskname_len = max(max_taskname_len, len(job.task_name()))
+
+    queued_procs = []
+    queue = Manager().Queue()
+    for job in queued_jobs:
+        queued_procs += [(queue, run_dirs, job)]
+    #Queue of currently running subprocesses
+
+    num_failed = 0
+    with Pool(processes=args.j) as pool:
+        pool.starmap(run_vtr_flow_process,queued_procs)
+        pool.close()
+        pool.join()
+    for proc in queued_procs:
+        num_failed += queue.get()
+
+    return num_failed
+
+def run_vtr_flow_process(queue, run_dirs, job):
+    work_dir = job.work_dir(run_dirs[job.task_name()])
+    Path(work_dir).mkdir(parents=True, exist_ok=True)
+    log_filepath = str(PurePath(work_dir) / "vtr_flow.log")
+    out = None
+    vtr_flow_out = str(PurePath(work_dir) / "vtr_flow.out")
+    with open(log_filepath, 'w+') as log_file:
+        with open(vtr_flow_out, 'w+') as out_file:
+            with redirect_stdout(out_file):
+                out = run_vtr_flow(job.run_command(), find_vtr_file("run_vtr_flow.py"))
+        with open(vtr_flow_out, "r") as out_file:
+            for line in out_file.readlines():
+                print(line,end="")
+    if out:
+        queue.put(1)
+    else:
+        queue.put(0)
 
 def print_log(log_file, indent="    "):
     #Save position
