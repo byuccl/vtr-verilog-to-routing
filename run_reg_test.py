@@ -6,6 +6,7 @@ import argparse
 import textwrap
 import subprocess
 from datetime import datetime
+from collections import OrderedDict
 # pylint: disable=wrong-import-position, import-error
 sys.path.insert(
     0, str(Path(__file__).resolve().parent / "vtr_flow/scripts/python_libs")
@@ -22,6 +23,7 @@ from vtr import (
     RawDefaultHelpFormatter,
     VERBOSITY_CHOICES,
 )
+from vtr.error import VtrError
 # pylint: enable=wrong-import-position, import-error
 BASIC_VERBOSITY = 1
 
@@ -83,16 +85,31 @@ def vtr_command_argparser(prog=None):
     )
 
     parser.add_argument(
-        "--create_golden",
+        "-create_golden",
         default=False,
         action="store_true",
         help="Create golden reference results for the associated tasks",
     )
+
+    parser.add_argument(
+        "-check_golden",
+        default=False,
+        action="store_true",
+        help="Check golden reference results for the associated tasks",
+    )
+
     parser.add_argument(
         "-parse",
         default=False,
         action="store_true",
         help="Only run the parse tests.",
+    )
+
+    parser.add_argument(
+        "-display_qor",
+        default=False,
+        action="store_true",
+        help="Displays the previous Qor test results",
     )
 
     parser.add_argument(
@@ -117,13 +134,6 @@ def vtr_command_argparser(prog=None):
         default=2,
         type=int,
         help="Sets the verbosity of the script. Higher values produce more output.",
-    )
-
-    parser.add_argument(
-        "--work_dir",
-        default=None,
-        help="Directory to store intermediate and result files."
-        "If None, set to the relevant directory under $VTR_ROOT/vtr_flow/tasks.",
     )
 
     parser.add_argument(
@@ -168,14 +178,19 @@ def vtr_command_main(arg_list, prog=None):
     try:
         if args.parse:
             num_qor_failures = parse_single_test(args, collect_task_list(args))
+        elif args.check_golden:
+            num_qor_failures = 0
+            parse_single_test(args, collect_task_list(args), check = True)
         elif args.create_golden:
             # Create golden results
             num_qor_failures = 0
-            parse_single_test(args, collect_task_list(args), check = False, calculate = False, create = True)
+            parse_single_test(args, collect_task_list(args), create = True)
         elif args.calc_geomean:
             # Calculate geo mean values
             num_qor_failures = 0
-            parse_single_test(args, collect_task_list(args), check = False, calculate = True)
+            parse_single_test(args, collect_task_list(args), calculate = True)
+        elif args.display_qor:
+            num_qor_failures = display_qor(args, collect_task_list(args))
         else:
             # Run any ODIN tests
             for reg_test in args.reg_test:
@@ -186,11 +201,12 @@ def vtr_command_main(arg_list, prog=None):
             vtr_task_list_files = collect_task_list(args)
 
             # Run the actual tasks, recording functionality failures
-            num_func_failures += run_tasks(args, vtr_task_list_files)
+            if len(vtr_task_list_files) > 0:
+                num_func_failures += run_tasks(args, vtr_task_list_files)
 
             # Check against golden results
-            if not args.skip_qor:
-                num_qor_failures += parse_single_test(args, vtr_task_list_files)
+            if not args.skip_qor and len(vtr_task_list_files) > 0:
+                num_qor_failures += parse_single_test(args, vtr_task_list_files, check=True,calculate = True)
 
         # Final summary
         print_verbose(BASIC_VERBOSITY, args.verbosity, "")
@@ -216,8 +232,28 @@ def vtr_command_main(arg_list, prog=None):
                 num_func_failures + num_qor_failures,
             ),
         )
+def display_qor(args, task_list):
+    for test in args.reg_test:
+        test_dir = Path(find_vtr_root()) / "vtr_flow/tasks/regression_tests"  / test
+        if not (test_dir / "qor_geomean.txt").is_file():
+            print("QoR results do not exist ({}/qor_geomean.txt)".format(str(test_dir)))
+            return 1
+        print("=" * 121)
+        print("\t" * 6,end = "")
+        print("{} QoR Results".format(test))
+        print("=" * 121)
+        with (test_dir / "qor_geomean.txt").open("r") as results:
+            data = OrderedDict()
+            data["revision"] = ["","%s"]
+            data["date"] = ["","%s"]
+            data["total_runtime"] = [" s", "%.3f"]
+            data["total_wirelength"] = [" units", "%.0f"]
+            data["num_clb"] = [" blocks", "%.2f"]
+            data["min_chan_width"] = [" tracks", "%.3f"]
+            data["crit_path_delay"] = [" ns", "%.3f"]
 
 
+    return 0
 def run_odin_test(args, test_name):
     odin_reg_script = [find_vtr_file("verify_odin.sh"), "--clean", "-C", find_vtr_file("output_on_error.conf"), "--nb_of_process", str(args.j), "--test", "{}/ODIN_II/regression_test/benchmark/".format(find_vtr_root())]
     if test_name == "odin_reg_full":
@@ -283,8 +319,6 @@ def run_tasks(args, task_lists):
     ]
     if args.show_failures:
         vtr_task_cmd += ["-show_failures"]
-    if args.work_dir:
-        vtr_task_cmd += ["--work_dir", args.workdir]
 
     # Exit code is number of failures
     return run_vtr_task(vtr_task_cmd)
@@ -304,8 +338,6 @@ def parse_single_test(args, task_lists, check=True, calculate=True, create=False
         vtr_task_cmd += ["-calc_geomean"]
     if create:
         vtr_task_cmd += ["-create_golden"]
-    if args.work_dir:
-        vtr_task_cmd += ["--work_dir", args.workdir]
 
     # Exit code is number of failures
     return run_vtr_task(vtr_task_cmd)
