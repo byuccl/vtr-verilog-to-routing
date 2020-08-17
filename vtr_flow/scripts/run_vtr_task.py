@@ -9,7 +9,7 @@ import subprocess
 import time
 import shutil
 from datetime import datetime
-from multiprocessing import Pool
+import multiprocessing
 from contextlib import redirect_stdout
 from multiprocessing import Process, Queue, Pool, Manager
 from run_vtr_flow import vtr_command_main as run_vtr_flow
@@ -641,6 +641,7 @@ def run_parallel(args, configs, queued_jobs):
 
     num_failed = 0
     with Pool(processes=args.j) as pool:
+        print("\n\n processors: {} \n\n".format(multiprocessing.cpu_count()))
         pool.starmap(run_vtr_flow_process,queued_procs)
         pool.close()
         pool.join()
