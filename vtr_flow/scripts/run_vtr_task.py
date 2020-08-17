@@ -249,7 +249,7 @@ def run_tasks(args, configs):
         jobs = create_jobs(args, configs)
 
         if args.run:
-            num_failed = run_parallel_test(args, configs, jobs)
+            num_failed = run_parallel(args, configs, jobs)
 
         if args.parse:
             print_verbose(BASIC_VERBOSITY, args.verbosity, "")
@@ -613,106 +613,6 @@ def ret_expected_vpr_status(arch, circuit, golden_results, script_params=None):
     return golden_metrics['vpr_status']
 
 def run_parallel(args, configs, queued_jobs):
-    """
-    Run each external command in commands with at most args.j commands running in parllel
-    """
-    #Determine the run dir for each config
-    run_dirs = {}
-    for config in configs:
-        task_dir = find_task_dir(args, config)
-        task_run_dir = get_next_run_dir(task_dir)
-        run_dirs[config.task_name] = task_run_dir
-
-
-    #We pop off the jobs of queued_jobs, which python does from the end,
-    #so reverse the list now so we get the expected order. This also ensures
-    #we are working with a copy of the jobs
-    queued_jobs = list(reversed(queued_jobs))
-    
-    #Find the max taskname length for pretty printing
-    max_taskname_len = 0
-    for job in queued_jobs:
-        max_taskname_len = max(max_taskname_len, len(job.task_name()))
-
-    #Queue of currently running subprocesses
-    running_procs = []
-
-    num_failed = 0
-    try:
-        while len(queued_jobs) > 0 or len(running_procs) > 0: #Outstanding or running jobs
-
-            #Launch outstanding jobs if workers are available
-            while len(queued_jobs) > 0 and len(running_procs) < args.j:
-                job = queued_jobs.pop()
-
-                #Make the working directory
-                work_dir = job.work_dir(run_dirs[job.task_name()])
-                Path(work_dir).mkdir(parents=True, exist_ok=True)
-                log_filepath = str(PurePath(work_dir) / "vtr_flow.log")
-                proc = None
-                vtr_flow_out = str(PurePath(work_dir) / "vtr_flow.out")
-                with open(log_filepath, 'w+') as log_file:
-                    with open(vtr_flow_out, 'w+') as out_file:
-                        with redirect_stdout(out_file):
-                            proc = run_vtr_flow(job.run_command(), find_vtr_file("run_vtr_flow.py"))
-                    with open(vtr_flow_out, "r") as out_file:
-                        for line in out_file.readlines():
-                            print(line,end="")
-                running_procs.append((proc, job, log_file))
-            while len(running_procs) > 0:
-                #Are any of the workers finished?
-                procs_to_del = set()
-                for i in range(len(running_procs)):
-                    proc, job, log_file = running_procs[i]
-
-                    status = proc
-                    if status is not None:
-                        #Process has completed
-                        if status == 0:
-                            if args.verbosity >= ALL_LOG_VERBOSITY:
-                                print_log(log_file)
-                        else:
-                            #Failed
-                            num_failed += 1
-                            if args.verbosity >= FAILED_LOG_VERBOSITY:
-                                print_log(log_file)
-
-                        log_file.close()
-
-                        #Record jobs to be removed from the run queue
-                        procs_to_del.add(proc)
-
-                if len(procs_to_del) > 0:
-                    #Remove jobs from run queue
-                    running_procs = [info for info in running_procs if info[0] not in procs_to_del]
-
-                    assert len(running_procs) < args.j
-
-                    #There are idle workers, allow new jobs to start
-                    break
-
-                #Don't constantly poll
-                time.sleep(0.1)
-
-    except KeyboardInterrupt as e:
-        print ("Recieved KeyboardInterrupt -- halting workers")
-        for proc, job, log_file in running_procs:
-            proc.terminate()
-            log_file.close()
-
-        #Remove any procs finished after terminate
-        running_procs = [(proc, job, log_file) for proc, job, log_file in running_procs if proc.returncode is None]
-
-    finally:
-        if len(running_procs) > 0:
-            print ("Killing {} worker processes".format(len(running_procs)))
-            for proc, job, log_file in running_procs:
-                proc.kill()
-                log_file.close()
-
-    return num_failed
-
-def run_parallel_test(args, configs, queued_jobs):
     """
     Run each external command in commands with at most args.j commands running in parllel
     """
