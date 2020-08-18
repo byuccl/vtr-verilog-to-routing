@@ -33,7 +33,6 @@ addons:
     - gdb
     - git
     - gperf
-    - PrettyTable
     - libcairo2-dev
     - libgtk-3-dev
     - libevent-dev
@@ -123,22 +122,20 @@ jobs:
         - CMAKE_PARAMS="-DVTR_ASSERT_LEVEL=3 -DWITH_BLIFEXPLORER=on"
         - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
       script:
+        - python3.6 get-pip.py   
+        - python3.6 -m pip install PrettyTable
+        - rm get-pip.py
         - ./.github/travis/build.sh
-        - travis_wait 30 ./run_reg_test.py vtr_reg_basic -show_failures -j2
+        - travis_wait 30 ./run_reg_test.pl vtr_reg_basic -show_failures -j2
     - stage: Test
       name: "Strong Regression Tests"
       env:
         - CMAKE_PARAMS="-DVTR_ASSERT_LEVEL=3 -DWITH_BLIFEXPLORER=on"
         - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
       script:
-        - ./.github/travis/build.sh
-        - travis_wait 30 ./run_reg_test.py vtr_reg_strong -show_failures -j2
-    - stage: Test
-      name: "Strong Regression Tests perl"
-      env:
-        - CMAKE_PARAMS="-DVTR_ASSERT_LEVEL=3 -DWITH_BLIFEXPLORER=on"
-        - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
-      script:
+        - python3.6 get-pip.py   
+        - python3.6 -m pip install PrettyTable
+        - rm get-pip.py
         - ./.github/travis/build.sh
         - travis_wait 30 ./run_reg_test.pl vtr_reg_strong -show_failures -j2
     - stage: Test
@@ -148,10 +145,13 @@ jobs:
         - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
       script:
         - ./.github/travis/build.sh
-        - travis_wait 30 ./run_reg_test.py vtr_reg_valgrind_small -show_failures -j2
+        - travis_wait 30 ./run_reg_test.pl vtr_reg_valgrind_small -show_failures -j2
     - stage: Test
       name: "Sanitized Basic Regression Tests"
       env:
+        - python3.6 get-pip.py   
+        - python3.6 -m pip install PrettyTable
+        - rm get-pip.py
         - CMAKE_PARAMS="-DVTR_ASSERT_LEVEL=3 -DVTR_ENABLE_SANITIZE=on -DVTR_IPO_BUILD=off -DWITH_BLIFEXPLORER=on"
         - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
         - BUILD_TYPE=debug
@@ -159,7 +159,7 @@ jobs:
       script:
         - ./.github/travis/build.sh
         #We skip QoR since we are only checking for errors in sanitizer runs
-        - travis_wait 50 ./run_reg_test.py vtr_reg_basic -show_failures -skip_qor -j2
+        - travis_wait 50 ./run_reg_test.pl vtr_reg_basic -show_failures -skip_qor -j2
     #Currently strong regression with sanitizers is disabled as it exceeds the maximum travis job run-time
     #- stage: Test
       #name: "Sanitized Strong Regression Tests"
@@ -171,7 +171,7 @@ jobs:
       #script:
         #- ./.github/travis/build.sh
         ##We skip QoR since we are only checking for errors in sanitizer runs
-        #- travis_wait 60 ./run_reg_test.py vtr_reg_strong -show_failures -skip_qor -j2
+        #- travis_wait 60 ./run_reg_test.pl vtr_reg_strong -show_failures -skip_qor -j2
     - stage: Test
       name: "ODIN-II Micro Tests"
       env:
@@ -179,8 +179,11 @@ jobs:
         - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
         - BUILD_TYPE=debug
       script:
+        - python3.6 get-pip.py   
+        - python3.6 -m pip install PrettyTable
+        - rm get-pip.py
         - ./.github/travis/build.sh
-        - ./run_reg_test.py odin_reg_micro -show_failures -j2
+        - ./run_reg_test.pl odin_reg_micro -show_failures -j2
 
     - stage: Test
       name: "Build Compatibility: GCC 5 (Ubuntu Xenial - 16.04)"
