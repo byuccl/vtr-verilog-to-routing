@@ -299,7 +299,6 @@ def load_parse_results(parse_results_filepath, primary_key_set=None):
             if row[0] == "+":
                 row = row[1:]
             elements = [elem.strip() for elem in row.split("\t")]
-
             if lineno == 0:
                 header = elements
             else:

@@ -314,7 +314,7 @@ def check_golden_results_for_task(args, config):
          
         #Load the golden reference
         if config.second_parse_file:
-            second_results_filepath = str(PurePath(config.config_dir).joinpath("parse_results_2.txt"))
+            second_results_filepath = str(PurePath(run_dir).joinpath("parse_results_2.txt"))
             second_results = load_parse_results(second_results_filepath)
             num_qor_failures = check_two_files(args, config, run_dir, task_results, task_results_filepath, second_results, second_results_filepath,  second_name = "second parse file")
             pretty_print_table(second_results_filepath)
@@ -568,7 +568,7 @@ def calc_geomean(args, configs):
                     print(previous_value if previous_value is not None else "-1",file=out,end="\t")
         print(datetime.date(datetime.now()),file=out,end="\t")
         print(args.revision,file=out)
-    pretty_print_table(summary_file)
+    pretty_print_table(out_file)
 
 
 def find_latest_run_dir(args, config):

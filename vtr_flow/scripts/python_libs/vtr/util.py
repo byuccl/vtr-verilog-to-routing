@@ -238,6 +238,9 @@ def pretty_print_table(file,border = False):
         reader = csv.reader(csv_file, delimiter="\t")
         first = True
         for row in reader:
+            row = [row_item.strip() + "\t" for row_item in row]
+            while row[-1] == "\t":
+                row = row[:-1]
             if first:
                 table.field_names = list(row)
                 for head in list(row):
