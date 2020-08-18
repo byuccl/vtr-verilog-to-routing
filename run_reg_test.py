@@ -6,6 +6,7 @@ import argparse
 import textwrap
 import subprocess
 from datetime import datetime
+from prettytable import PrettyTable
 from collections import OrderedDict
 # pylint: disable=wrong-import-position, import-error
 sys.path.insert(
@@ -244,15 +245,29 @@ def display_qor(args, task_list):
         print("=" * 121)
         with (test_dir / "qor_geomean.txt").open("r") as results:
             data = OrderedDict()
-            data["revision"] = ["","%s"]
-            data["date"] = ["","%s"]
-            data["total_runtime"] = [" s", "%.3f"]
-            data["total_wirelength"] = [" units", "%.0f"]
-            data["num_clb"] = [" blocks", "%.2f"]
-            data["min_chan_width"] = [" tracks", "%.3f"]
-            data["crit_path_delay"] = [" ns", "%.3f"]
-
-
+            data["revision"] = [8, "","{}"]
+            data["date"] = [7, "","{}"]
+            data["total_runtime"] = [3," s", "%.3f"]
+            data["total_wirelength"] = [2," units", "%.0f"]
+            data["num_clb"] = [4," blocks", "%.2f"]
+            data["min_chan_width"] = [5," tracks", "%.3f"]
+            data["crit_path_delay"] = [6," ns", "%.3f"]
+            table = PrettyTable()
+            table.field_names = list(data.keys())
+            results.readline()
+            for line in results.readlines():
+                    info = line.split()
+                    row = []
+                    for key, values in data.items():
+                        if len(info) - 1 < values[0]:
+                            row += [""]
+                        else:
+                            if values[2] == "{}":
+                                row += [(values[2].format(info[values[0]]))+values[1]]
+                            else:
+                                row += [(values[2] % float(info[values[0]]))+values[1]]
+                    table.add_row(row)
+            print(table)
     return 0
 def run_odin_test(args, test_name):
     odin_reg_script = [find_vtr_file("verify_odin.sh"), "--clean", "-C", find_vtr_file("output_on_error.conf"), "--nb_of_process", str(args.j), "--test", "{}/ODIN_II/regression_test/benchmark/".format(find_vtr_root())]

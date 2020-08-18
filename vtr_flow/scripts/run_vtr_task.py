@@ -10,12 +10,13 @@ import time
 import shutil
 from datetime import datetime
 from contextlib import redirect_stdout
-from multiprocessing import Queue, Pool, Manager
+from prettytable import PrettyTable, from_csv
+from multiprocessing import Queue, Pool, Manager, cpu_count
 from run_vtr_flow import vtr_command_main as run_vtr_flow
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / 'python_libs'))
 
-from vtr import load_list_file, find_vtr_file, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, VERBOSITY_CHOICES, argparse_str2bool, get_next_run_dir, get_latest_run_dir, load_task_config, TaskConfig, find_task_config_file, CommandRunner, load_pass_requirements, load_parse_results, parse_vtr_flow, load_script_param, get_latest_run_number
+from vtr import load_list_file, find_vtr_file, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, VERBOSITY_CHOICES, argparse_str2bool, get_next_run_dir, get_latest_run_dir, load_task_config, TaskConfig, find_task_config_file, CommandRunner, load_pass_requirements, load_parse_results, parse_vtr_flow, load_script_param, get_latest_run_number, pretty_print_table
 from vtr.error import VtrError, InspectError, CommandError
 
 BASIC_VERBOSITY = 1
@@ -316,13 +317,14 @@ def check_golden_results_for_task(args, config):
             second_results_filepath = str(PurePath(config.config_dir).joinpath("parse_results_2.txt"))
             second_results = load_parse_results(second_results_filepath)
             num_qor_failures = check_two_files(args, config, run_dir, task_results, task_results_filepath, second_results, second_results_filepath,  second_name = "second parse file")
-            
+            pretty_print_table(second_results_filepath)
+
             check_string = "second parse file results"
         else:
             golden_results_filepath = str(PurePath(config.config_dir).joinpath("golden_results.txt"))
             golden_results = load_parse_results(golden_results_filepath)
             num_qor_failures = check_two_files(args, config, run_dir, task_results, task_results_filepath, golden_results, golden_results_filepath)
-        
+        pretty_print_table(task_results_filepath)
         
 
     if num_qor_failures == 0:
@@ -518,6 +520,7 @@ def summarize_qor(args, configs):
                     first = False
                 for line in in_file:
                     print("{}\t{}".format(config.task_name,line), file = out, end="")
+            pretty_print_table(str(Path(find_latest_run_dir(args, config)) / "qor_results.txt"))
 
 def calc_geomean(args, configs):
     first = False 
@@ -565,6 +568,7 @@ def calc_geomean(args, configs):
                     print(previous_value if previous_value is not None else "-1",file=out,end="\t")
         print(datetime.date(datetime.now()),file=out,end="\t")
         print(args.revision,file=out)
+    pretty_print_table(summary_file)
 
 
 def find_latest_run_dir(args, config):
@@ -630,7 +634,8 @@ def run_parallel(args, configs, queued_jobs):
     #Queue of currently running subprocesses
 
     num_failed = 0
-    with Pool(processes=args.j) as pool:
+    process_count = args.j if args.j <= cpu_count() else cpu_count()
+    with Pool(processes=process_count) as pool:
         pool.starmap(run_vtr_flow_process,queued_procs)
         pool.close()
         pool.join()
@@ -784,6 +789,7 @@ def parse_files(config_jobs, run_dir, flow_metrics_basename="parse_results.txt")
                         header = False
                     #Second line is the data
                     print(lines[1], file = out_f, end="")
+                pretty_print_table(job_parse_results_filepath)
             else:
                 print_verbose(BASIC_VERBOSITY, args.v, "Warning: Flow result file not found (task QoR will be incomplete): {} ".format(str(job_parse_results_filepath)))
 

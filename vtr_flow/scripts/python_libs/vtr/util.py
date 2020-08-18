@@ -11,6 +11,7 @@ import subprocess
 import distutils.spawn as distutils_spawn
 import argparse
 import csv
+from prettytable import PrettyTable
 from collections import OrderedDict
 
 from vtr.error import VtrError, InspectError, CommandError
@@ -228,6 +229,24 @@ def check_cmd(command):
     """
 
     return Path(command).exists()
+
+def pretty_print_table(file,border = False):
+    table = PrettyTable()
+    table.border = border
+    reader = None
+    with open(file,"r") as csv_file:
+        reader = csv.reader(csv_file, delimiter="\t")
+        first = True
+        for row in reader:
+            if first:
+                table.field_names = list(row)
+                for head in list(row):
+                    table.align[head] = "l"
+                first = False
+            else:
+                table.add_row(row)
+    with open(file, "w+") as out_file:
+        print(table,file=out_file)
 
 
 def write_tab_delimitted_csv(filepath, rows):

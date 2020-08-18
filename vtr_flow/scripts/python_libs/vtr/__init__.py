@@ -19,6 +19,7 @@ from .util import (
     get_latest_run_dir,
     get_latest_run_number,
     verify_file,
+    pretty_print_table
 )
 from .inspect import determine_lut_size, determine_min_w, determine_memory_addr_width, load_parse_patterns, load_pass_requirements, load_parse_results, load_script_param
 #pylint: disable=reimported
