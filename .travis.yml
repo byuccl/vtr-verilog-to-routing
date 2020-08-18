@@ -32,6 +32,7 @@ addons:
     - fontconfig
     - gdb
     - git
+    - PrettyTable
     - gperf
     - libcairo2-dev
     - libgtk-3-dev
