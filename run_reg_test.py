@@ -21,8 +21,7 @@ from vtr import (
     print_verbose,
     find_vtr_root,
     format_elapsed_time,
-    RawDefaultHelpFormatter,
-    VERBOSITY_CHOICES,
+    RawDefaultHelpFormatter
 )
 from vtr.error import VtrError
 # pylint: enable=wrong-import-position, import-error
@@ -113,6 +112,10 @@ def vtr_command_argparser(prog=None):
         help="Displays the previous Qor test results",
     )
 
+    parser.add_argument('-script',
+        default='run_vtr_flow.py',
+        help="Determines what flow script is used for the tests")
+
     parser.add_argument(
         "-skip_qor",
         default=False,
@@ -126,15 +129,6 @@ def vtr_command_argparser(prog=None):
         type=int,
         metavar="NUM_PROC",
         help="How many processors to use for execution.",
-    )
-
-    parser.add_argument(
-        "-v",
-        "--verbosity",
-        choices=list(chain(VERBOSITY_CHOICES, [5])),
-        default=2,
-        type=int,
-        help="Sets the verbosity of the script. Higher values produce more output.",
     )
 
     parser.add_argument(
@@ -152,11 +146,12 @@ def vtr_command_argparser(prog=None):
     )
 
     parser.add_argument(
-        "--debug",
+        "-long_task_names",
         default=False,
         action="store_true",
-        help="Produce additional debug output",
+        help="Display long task names",
     )
+
 
     return parser
 
@@ -167,9 +162,6 @@ def main():
 
 def vtr_command_main(arg_list, prog=None):
     start = datetime.now()
-    print("=============================================")
-    print("    Verilog-to-Routing Regression Testing")
-    print("=============================================")
     # Load the arguments
     args = vtr_command_argparser(prog).parse_args(arg_list)
 
@@ -194,6 +186,10 @@ def vtr_command_main(arg_list, prog=None):
             num_qor_failures = display_qor(args, collect_task_list(args))
         else:
             # Run any ODIN tests
+            print("=============================================")
+            print("    Verilog-to-Routing Regression Testing")
+            print("=============================================")
+
             for reg_test in args.reg_test:
                 if reg_test.startswith("odin"):
                     num_func_failures += run_odin_test(args, reg_test)
@@ -210,29 +206,24 @@ def vtr_command_main(arg_list, prog=None):
                 num_qor_failures += parse_single_test(args, vtr_task_list_files, check=True,calculate = True)
 
         # Final summary
-        print_verbose(BASIC_VERBOSITY, args.verbosity, "")
         if num_func_failures == 0 and (num_qor_failures == 0 or args.skip_qor):
-            print_verbose(BASIC_VERBOSITY, args.verbosity, "PASSED All Test(s)")
+            print("PASSED All Test(s)")
         elif num_func_failures != 0 or num_qor_failures != 0:
-            print_verbose(
-                BASIC_VERBOSITY,
-                args.verbosity,
+            print(
                 "FAILED {} functionality and {} QoR tests".format(
                     num_func_failures, num_qor_failures
-                ),
+                )
             )
 
         sys.exit(num_func_failures + num_qor_failures)
     finally:
-        print_verbose(
-            BASIC_VERBOSITY,
-            args.verbosity,
-            "\n# {} took {} (exiting {})".format(
-                prog,
+        print(
+            "\n took {} (exiting {})".format(
                 format_elapsed_time(datetime.now() - start),
                 num_func_failures + num_qor_failures,
             ),
         )
+
 def display_qor(args, task_list):
     for test in args.reg_test:
         test_dir = Path(find_vtr_root()) / "vtr_flow/tasks/regression_tests"  / test
@@ -293,13 +284,11 @@ def run_odin_test(args, test_name):
     assert result is not None
     if result != 0:
         # Error
-        print_verbose(
-            BASIC_VERBOSITY, args.verbosity, "FAILED test '{}'".format(test_name)
-        )
+        print( "FAILED test '{}'".format(test_name))
         return 1
 
     # Pass
-    print_verbose(BASIC_VERBOSITY, args.verbosity, "PASSED test '{}'".format(test_name))
+    print("PASSED test '{}'".format(test_name))
     return 0
 
 def collect_task_list(args):
@@ -327,26 +316,20 @@ def run_tasks(args, task_lists):
     vtr_task_cmd += [
         "-j",
         str(args.j),
-        "-v",
-        str(max(0, args.verbosity - 1)),
-        "-print_metadata",
-        str(args.debug),
+        "-script",
+        args.script
     ]
     if args.show_failures:
         vtr_task_cmd += ["-show_failures"]
-
+    if not args.long_task_names:
+        vtr_task_cmd += ["-short_task_names"]
     # Exit code is number of failures
+    print("scripts/run_vtr_task.py {} \n".format(' '.join(map(str, vtr_task_cmd))))
     return run_vtr_task(vtr_task_cmd)
 
 
 def parse_single_test(args, task_lists, check=True, calculate=True, create=False):
     vtr_task_cmd = ["-l"] + task_lists
-    vtr_task_cmd += [
-        "-v",
-        str(max(0, args.verbosity - 1)),
-        "-print_metadata",
-        str(args.debug),
-    ]
     if check:
         vtr_task_cmd += ["-check_golden"]
     if calculate:

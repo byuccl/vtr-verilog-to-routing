@@ -4,6 +4,7 @@ Module that contains the task functions
 from pathlib import Path
 from pathlib import PurePath
 from shlex import split
+import itertools
 
 from vtr import VtrError, find_vtr_root, load_list_file
 
@@ -145,6 +146,26 @@ def load_task_config(config_file):
     # Create the task config object
     return TaskConfig(**key_values)
 
+def shorten_task_names(configs, common_task_prefix):
+    new_configs = []
+    for config in configs:
+        config.task_name = config.task_name.replace(common_task_prefix,"")
+        new_configs += [config]
+    return new_configs
+def find_longest_task_description(configs):
+    longest = 0
+    for config in configs:
+        for arch, circuit in itertools.product(config.archs, config.circuits):
+            if config.script_params_list_add:
+                for param in config.script_params_list_add:
+                    arch_circuit_len = len(str(PurePath(arch)  / circuit / "common_" / param))
+                    if arch_circuit_len > longest:
+                        longest = arch_circuit_len
+            else:
+                arch_circuit_len = len(str(PurePath(arch)  / circuit / "common" ))
+                if arch_circuit_len > longest:
+                    longest = arch_circuit_len
+    return longest
 
 def find_task_config_file(task_name):
     """

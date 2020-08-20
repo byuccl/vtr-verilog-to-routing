@@ -16,9 +16,6 @@ from collections import OrderedDict
 
 from vtr.error import VtrError, InspectError, CommandError
 
-VERBOSITY_CHOICES = range(5)
-
-
 class RawDefaultHelpFormatter(
         argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter
 ):

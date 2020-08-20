@@ -10,18 +10,15 @@ import time
 import shutil
 from datetime import datetime
 from contextlib import redirect_stdout
-from prettytable import PrettyTable, from_csv
+from prettytable import PrettyTable
 from multiprocessing import Queue, Pool, Manager, cpu_count
 from run_vtr_flow import vtr_command_main as run_vtr_flow
+from difflib import SequenceMatcher
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / 'python_libs'))
 
-from vtr import load_list_file, find_vtr_file, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, VERBOSITY_CHOICES, argparse_str2bool, get_next_run_dir, get_latest_run_dir, load_task_config, TaskConfig, find_task_config_file, CommandRunner, load_pass_requirements, load_parse_results, parse_vtr_flow, load_script_param, get_latest_run_number, pretty_print_table
+from vtr import load_list_file, find_vtr_file, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, argparse_str2bool, get_next_run_dir, get_latest_run_dir, load_task_config, TaskConfig, find_task_config_file, CommandRunner, load_pass_requirements, load_parse_results, parse_vtr_flow, load_script_param, get_latest_run_number, pretty_print_table, parse_tasks, find_task_dir, find_latest_run_dir, shorten_task_names, find_longest_task_description
 from vtr.error import VtrError, InspectError, CommandError
-
-BASIC_VERBOSITY = 1
-FAILED_LOG_VERBOSITY = 2
-ALL_LOG_VERBOSITY = 4
 
 class Job:
 
@@ -134,12 +131,21 @@ def vtr_command_argparser(prog=None):
                         default='local',
                         help="What system to run the tasks on.")
 
+    parser.add_argument('-script',
+                        default='run_vtr_flow.py',
+                        help="Determines what flow script is used for the tasks")
+
+    parser.add_argument("-short_task_names",
+                        default=False,
+                        action="store_true",
+                        help="Output shorter task names.")
+
     parser.add_argument("-show_failures",
                         default=False,
                         action="store_true",
                         help="Produce additional debug output")
 
-    parser.add_argument('-j',
+    parser.add_argument('-j','-p',
                         default=1,
                         type=int,
                         metavar="NUM_PROC",
@@ -150,9 +156,8 @@ def vtr_command_argparser(prog=None):
                         metavar="TIMEOUT_SECONDS",
                         help="Time limit for this script.")
 
-    parser.add_argument("-v", "-verbosity",
-                        choices=VERBOSITY_CHOICES,
-                        default=2,
+    parser.add_argument("-verbosity",
+                        default=0,
                         type=int,
                         help="Sets the verbosity of the script. Higher values produce more output.")
     
@@ -206,10 +211,23 @@ def vtr_command_main(arg_list, prog=None):
             task_names += load_list_file(list_file)
 
         config_files = [find_task_config_file(task_name) for task_name in task_names]
-
-        configs = [load_task_config(config_file) for config_file in config_files]
-
-        num_failed = run_tasks(args, configs)
+        configs = []
+        longest_name = 0
+        common_task_prefix = None
+        for config_file in config_files:
+            config = load_task_config(config_file)
+            configs += [config]
+            if common_task_prefix is None:
+                common_task_prefix = config.task_name
+            else:
+                match = SequenceMatcher(None, common_task_prefix, config.task_name).find_longest_match(0, len(common_task_prefix), 0, len(config.task_name))
+                common_task_prefix = common_task_prefix[match.a: match.a + match.size]
+            if len(config.task_name) > longest_name:
+                longest_name = len(config.task_name)
+        if args.short_task_names:
+            configs = shorten_task_names(configs, common_task_prefix)
+        longest_arch_circuit = find_longest_task_description(configs)
+        num_failed = run_tasks(args, configs, longest_name, longest_arch_circuit)
 
     except CommandError as e:
         print ("Error: {msg}".format(msg=e.msg))
@@ -229,7 +247,7 @@ def vtr_command_main(arg_list, prog=None):
         sys.exit(num_failed)
     return num_failed
 
-def run_tasks(args, configs):
+def run_tasks(args, configs, longest_name, longest_arch_circuit):
     """
     Runs the specified set of tasks (configs)
     """
@@ -241,21 +259,19 @@ def run_tasks(args, configs):
         assert args.j > 0, "Invalid number of processors"
 
         #Generate the jobs, each corresponding to an invocation of vtr flow
-        jobs = create_jobs(args, configs)
+        jobs = create_jobs(args, configs, longest_name, longest_arch_circuit)
 
         if args.run:
             num_failed = run_parallel(args, configs, jobs)
 
         if args.parse:
-            print_verbose(BASIC_VERBOSITY, args.v, "")
+            print("Parsing test results...")
             parse_tasks(args, configs, jobs)
 
         if args.create_golden:
-            print_verbose(BASIC_VERBOSITY, args.v, "")
             create_golden_results_for_tasks(args, configs)
 
         if args.check_golden:
-            print_verbose(BASIC_VERBOSITY, args.v, "")
             num_failed += check_golden_results_for_tasks(args, configs)
         
         if args.calc_geomean:
@@ -281,14 +297,12 @@ def create_golden_results_for_task(args, config):
     task_results = str(PurePath(run_dir).joinpath("parse_results.txt"))
     golden_results_filepath = str(PurePath(config.config_dir).joinpath("golden_results.txt"))
 
-    print_verbose(BASIC_VERBOSITY, args.v, "Creating golden task results from {} -> {}".format(run_dir, golden_results_filepath))
-
     shutil.copy(task_results, golden_results_filepath)
 
 def check_golden_results_for_tasks(args, configs):
     num_qor_failures = 0
 
-    print_verbose(BASIC_VERBOSITY, args.v, "Checking QoR:")
+    print("Calculating QoR results...")
     for config in configs:
         num_qor_failures += check_golden_results_for_task(args, config)
 
@@ -302,8 +316,8 @@ def check_golden_results_for_task(args, config):
     run_dir = find_latest_run_dir(args, config)
 
     if not config.pass_requirements_file:
-        print_verbose(BASIC_VERBOSITY, args.v, 
-                      "Warning: no pass requirements file for task {}, QoR will not be checked".format(config.task_name))
+        print(
+              "Warning: no pass requirements file for task {}, QoR will not be checked".format(config.task_name))
     else:
 
         #Load the pass requirements file
@@ -328,8 +342,7 @@ def check_golden_results_for_task(args, config):
         
 
     if num_qor_failures == 0:
-        print_verbose(BASIC_VERBOSITY, args.v, 
-                      "    PASSED {} {}".format(PurePath(run_dir).name, config.task_name))
+        print("    PASSED {} {}".format(PurePath(run_dir).name, config.task_name))
 
     return num_qor_failures
 
@@ -373,8 +386,7 @@ def check_two_files(args, config, run_dir, first_results, first_results_filepath
     #Warn about any elements in first result file that are not found in second result file
     for arch, circuit, script_params in first_primary_keys:
         if second_results.metrics(arch, circuit,script_params) == None:
-            print_verbose(BASIC_VERBOSITY, args.v,
-                            "Warning: {} includes result for {}/{} missing in {} results".format(first_name, arch, circuit, second_name))
+            print("Warning: {} includes result for {}/{} missing in {} results".format(first_name, arch, circuit, second_name))
     num_qor_failures = 0
     #Verify that the first results pass each metric for all cases in the second results 
     for (arch, circuit, script_params) in second_primary_keys:
@@ -384,11 +396,11 @@ def check_two_files(args, config, run_dir, first_results, first_results_filepath
         for metric in pass_requirements.keys():
 
             if not metric in second_metrics:
-                print_verbose(BASIC_VERBOSITY, args.v, "Warning: Metric {} missing from {} results".format(metric, second_name))
+                print("Warning: Metric {} missing from {} results".format(metric, second_name))
                 continue
 
             if not metric in first_metrics:
-                print_verbose(BASIC_VERBOSITY, args.v, "Warning: Metric {} missing from {} results".format(metric, first_name))
+                print("Warning: Metric {} missing from {} results".format(metric, first_name))
                 continue
 
             try:
@@ -398,11 +410,11 @@ def check_two_files(args, config, run_dir, first_results, first_results_filepath
                 reason = e.msg
 
             if not metric_passed:
-                print_verbose(BASIC_VERBOSITY, args.v, "    FAILED {} {} {}/{}: {} {}".format(PurePath(run_dir).name, config.task_name, arch, circuit, metric, reason))
+                print("    FAILED {} {} {}/{}: {} {}".format(PurePath(run_dir).name, config.task_name, arch, circuit, metric, reason))
                 num_qor_failures += 1
     return num_qor_failures
 
-def create_jobs(args, configs):
+def create_jobs(args, configs, longest_name, longest_arch_circuit):
     jobs = []
     for config in configs:
         for arch, circuit in itertools.product(config.archs, config.circuits):
@@ -417,7 +429,6 @@ def create_jobs(args, configs):
 
             if args.show_failures:
                 cmd += ["-show_failures"]
-            cmd += ["-name","{}:\t\t\t{}".format(config.task_name.split("_", 1)[1],work_dir)]
             cmd += config.script_params if config.script_params else []
             cmd += config.script_params_common if config.script_params_common else []
                     
@@ -445,11 +456,16 @@ def create_jobs(args, configs):
                 qor_parse_command = [resolve_vtr_source_file(config, config.qor_parse_file, str(PurePath("parse").joinpath("qor_config")))]
             #We specify less verbosity to the sub-script
             # This keeps the amount of output reasonable
-            if max(0, args.v - 1):
+            if max(0, args.verbosity - 1):
                 cmd += ["-verbose"]
             if config.script_params_list_add:
                 for value in config.script_params_list_add:
                     temp_dir = run_dir + "/common_{}".format(value.replace(" ", "_"))
+                    num_tabs_before = int((longest_name - len(config.task_name)) / 8) + 1
+                    num_tabs_after = int((longest_arch_circuit - len(work_dir + "/common_{}".format(value.replace(" ", "_")))) / 8)
+                    spacing_before = "\t" * num_tabs_before
+                    spacing_after = "\t" * num_tabs_after
+                    cmd += ["-name","{}:{}{}/common_{}{}".format(config.task_name,spacing_before,work_dir, value.replace(" ", "_"),spacing_after)]
                     cmd += ["-temp_dir", temp_dir]
                     expected_min_W = ret_expected_min_W(circuit, arch, golden_results, value)
                     expected_min_W = int(expected_min_W * args.minw_hint_factor)
@@ -478,6 +494,11 @@ def create_jobs(args, configs):
                     jobs.append(Job(config.task_name, arch, circuit, work_dir + "/{}".format(load_script_param(value)), cmd + value.split(" "), current_parse_cmd, current_second_parse_cmd, current_qor_parse_command))
             else:
                 cmd += ["-temp_dir", run_dir + "/common"]
+                num_tabs_before = int((longest_name - len(config.task_name)) / 8) + 1
+                num_tabs_after = int((longest_arch_circuit - len(work_dir)) / 8) 
+                spacing_before = "\t" * num_tabs_before
+                spacing_after = "\t" * num_tabs_after
+                cmd += ["-name","{}:{}{}{}".format(config.task_name,spacing_before,work_dir + "/common",spacing_after)]
                 expected_min_W = ret_expected_min_W(circuit, arch, golden_results)
                 expected_min_W = int(expected_min_W * args.minw_hint_factor)
                 expected_min_W += expected_min_W % 2
@@ -568,28 +589,6 @@ def calc_geomean(args, configs):
                     print(previous_value if previous_value is not None else "-1",file=out,end="\t")
         print(datetime.date(datetime.now()),file=out,end="\t")
         print(args.revision,file=out)
-    pretty_print_table(out_file)
-
-
-def find_latest_run_dir(args, config):
-    task_dir = find_task_dir(args, config)
-
-    run_dir = get_latest_run_dir(task_dir)
-
-    if not run_dir:
-        raise InspectError("Failed to find run directory for task '{}' in '{}'".format(config.task_name, task_dir))
-
-    assert Path(run_dir).is_dir()
-
-    return run_dir
-
-def find_task_dir(args, config):
-    task_dir = None
-    #Task dir is just above the config directory
-    task_dir = Path(config.config_dir).parent
-    assert task_dir.is_dir
-
-    return str(task_dir)
 
 def ret_expected_min_W(circuit, arch, golden_results, script_params=None):
     script_params = load_script_param(script_params)
@@ -630,7 +629,7 @@ def run_parallel(args, configs, queued_jobs):
     queued_procs = []
     queue = Manager().Queue()
     for job in queued_jobs:
-        queued_procs += [(queue, run_dirs, job)]
+        queued_procs += [(queue, run_dirs, job, args.script)]
     #Queue of currently running subprocesses
 
     num_failed = 0
@@ -644,7 +643,7 @@ def run_parallel(args, configs, queued_jobs):
 
     return num_failed
 
-def run_vtr_flow_process(queue, run_dirs, job):
+def run_vtr_flow_process(queue, run_dirs, job, script):
     work_dir = job.work_dir(run_dirs[job.task_name()])
     Path(work_dir).mkdir(parents=True, exist_ok=True)
     log_filepath = str(PurePath(work_dir) / "vtr_flow.log")
@@ -653,7 +652,11 @@ def run_vtr_flow_process(queue, run_dirs, job):
     with open(log_filepath, 'w+') as log_file:
         with open(vtr_flow_out, 'w+') as out_file:
             with redirect_stdout(out_file):
-                out = run_vtr_flow(job.run_command(), find_vtr_file("run_vtr_flow.py"))
+                if script == "run_vtr_flow.py":
+                    out = run_vtr_flow(job.run_command(), find_vtr_file("run_vtr_flow.py"))
+                else:
+                    out = subprocess.check_call([find_vtr_file(script)] + job.run_command(), cwd=find_vtr_root(),stdout=out_file)
+                    
         with open(vtr_flow_out, "r") as out_file:
             for line in out_file.readlines():
                 print(line,end="")
@@ -716,82 +719,6 @@ def resolve_vtr_source_file(config, filename, base_dir=""):
     #Not found
     raise InspectError("Failed to resolve VTR source file {}".format(filename))
 
-def parse_tasks(args, configs, jobs):
-    """
-    Parse the selection of tasks specified in configs and associated jobs
-    """
-    for config in configs:
-        config_jobs = [job for job in jobs if job.task_name() == config.task_name]
-        parse_task(args, config, config_jobs)
-
-def parse_task(args, config, config_jobs, flow_metrics_basename="parse_results.txt"):
-    """
-    Parse a single task run.
-
-    This generates a file parse_results.txt in the task's working directory,
-    which is an amalgam of the parse_rests.txt's produced by each job (flow invocation)
-    """
-    run_dir = find_latest_run_dir(args, config)
-    
-    print_verbose(BASIC_VERBOSITY, args.v, "Parsing task run {}".format(run_dir))
-
-    #Record max widths for pretty printing
-    max_arch_len = len("architecture")
-    max_circuit_len = len("circuit")
-    for job in config_jobs:
-        work_dir = job.work_dir(get_latest_run_dir(find_task_dir(args, config)))
-        if job.parse_command():
-                        parse_filepath = str(PurePath(work_dir) / flow_metrics_basename)
-                        with open(parse_filepath, 'w+') as parse_file:
-                            with redirect_stdout(parse_file):
-                                parse_vtr_flow(job.parse_command())
-        if job.second_parse_command():
-                        parse_filepath = str(PurePath(work_dir) / "parse_results_2.txt")
-                        with open(parse_filepath, 'w+') as parse_file:
-                            with redirect_stdout(parse_file):
-                                parse_vtr_flow(job.second_parse_command())
-        if job.qor_parse_command():
-                        parse_filepath = str(PurePath(work_dir) / "qor_results.txt")
-                        with open(parse_filepath, 'w+') as parse_file:
-                            with redirect_stdout(parse_file):
-                                parse_vtr_flow(job.qor_parse_command())
-        max_arch_len = max(max_arch_len, len(job.arch()))
-        max_circuit_len = max(max_circuit_len, len(job.circuit()))
-    parse_files(config_jobs,run_dir,flow_metrics_basename)
-
-    if config.second_parse_file:
-        parse_files(config_jobs,run_dir,"parse_results_2.txt")
-
-    if config.qor_parse_file:
-        parse_files(config_jobs,run_dir,"qor_results.txt")
-        
-    
-def parse_files(config_jobs, run_dir, flow_metrics_basename="parse_results.txt"):
-    task_parse_results_filepath = str(PurePath(run_dir) / flow_metrics_basename)
-    with open(task_parse_results_filepath, "w") as out_f:
-
-        #Start the header
-        
-        header = True
-        for job in config_jobs:
-            #Open the job results file
-            #
-            #The job results file is basically the same format, but excludes the architecture and circuit fields,
-            #which we prefix to each line of the task result file
-            job_parse_results_filepath = Path(job.work_dir(run_dir)) /  flow_metrics_basename
-            if job_parse_results_filepath.exists():
-                with open(job_parse_results_filepath) as in_f:
-                    lines = in_f.readlines()
-                    assert len(lines) == 2
-                    if header:
-                        #First line is the header
-                        print(lines[0],file=out_f, end="")
-                        header = False
-                    #Second line is the data
-                    print(lines[1], file = out_f, end="")
-                pretty_print_table(job_parse_results_filepath)
-            else:
-                print_verbose(BASIC_VERBOSITY, args.v, "Warning: Flow result file not found (task QoR will be incomplete): {} ".format(str(job_parse_results_filepath)))
 
 if __name__ == "__main__":
     main()

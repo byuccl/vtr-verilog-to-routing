@@ -9,7 +9,6 @@ from .util import (
     relax_w,
     file_replace,
     RawDefaultHelpFormatter,
-    VERBOSITY_CHOICES,
     format_elapsed_time,
     write_tab_delimitted_csv,
     load_list_file,
@@ -29,6 +28,7 @@ from .odin import run
 from .ace import run
 from .error import *
 from .flow import run, VtrStage
-from .task import load_task_config, TaskConfig, find_task_config_file
+from .task import load_task_config, TaskConfig, find_task_config_file, shorten_task_names, find_longest_task_description
 from .parse_vtr_flow import parse_vtr_flow
+from .parse_vtr_task import parse_tasks, find_task_dir, find_latest_run_dir
 #pylint: enable=reimported
