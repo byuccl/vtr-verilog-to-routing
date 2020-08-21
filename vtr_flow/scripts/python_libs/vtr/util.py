@@ -549,6 +549,14 @@ def get_next_run_dir(base_dir):
     """
     return str(PurePath(base_dir) / run_dir_name(get_next_run_number(base_dir)))
 
+def find_task_dir(args, config):
+    task_dir = None
+    #Task dir is just above the config directory
+    task_dir = Path(config.config_dir).parent
+    assert task_dir.is_dir
+
+    return str(task_dir)
+
 
 def get_latest_run_dir(base_dir):
     """

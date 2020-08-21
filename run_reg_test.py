@@ -207,11 +207,11 @@ def vtr_command_main(arg_list, prog=None):
 
         # Final summary
         if num_func_failures == 0 and (num_qor_failures == 0 or args.skip_qor):
-            print("PASSED All Test(s)")
+            print("All tests passed")
         elif num_func_failures != 0 or num_qor_failures != 0:
             print(
-                "FAILED {} functionality and {} QoR tests".format(
-                    num_func_failures, num_qor_failures
+                "Error: {} tests failed".format(
+                    num_func_failures + num_qor_failures
                 )
             )
 

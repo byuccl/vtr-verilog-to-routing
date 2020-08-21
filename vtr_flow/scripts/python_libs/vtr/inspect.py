@@ -106,7 +106,7 @@ class RangePassRequirement(PassRequirement):
         if golden_value == 0.: #Avoid division by zero
 
             if golden_value == check_value:
-                return True, "golden and check both equal 0"
+                return True, "{} and check both equal 0".format(check_string)
             else:
                 norm_check_value = float("inf")
         else:
@@ -120,7 +120,7 @@ class RangePassRequirement(PassRequirement):
             if self.min_value() <= norm_check_value <= self.max_value():
                 return True, "relative value within range"
             else:
-                return False, "relative value {} outside of range [{},{}]".format(norm_check_value, self.min_value(), self.max_value())
+                return False, "relative value {} outside of range [{},{}] and not equal to {} value: {}".format(norm_check_value, self.min_value(), self.max_value(), check_string, golden_value)
 
 class RangeAbsPassRequirement(PassRequirement):
 
@@ -182,7 +182,7 @@ class RangeAbsPassRequirement(PassRequirement):
         if (self.min_value() <= norm_check_value <= self.max_value()) or abs(check_value - golden_value) <= self.abs_threshold():
             return True, "relative value within range"
         else:
-            return False, "relative value {} outside of range [{},{}] and above absolute threshold {}".format(norm_check_value, self.min_value(), self.max_value(),self.abs_threshold())
+            return False, "relative value {} outside of range [{},{}], above absolute threshold {} and not equal to {} value: {}".format(norm_check_value, self.min_value(), self.max_value(),self.abs_threshold(), check_string, golden_value)
  
 class ParseResults:
     def __init__(self):

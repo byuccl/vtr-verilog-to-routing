@@ -5,6 +5,7 @@ Module to parse the vtr flow results.
 import sys
 from pathlib import Path
 import glob
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import vtr
 
 from collections import OrderedDict
