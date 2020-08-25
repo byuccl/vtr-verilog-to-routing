@@ -1,29 +1,27 @@
 #!/usr/bin/env python3
 from pathlib import Path
-from itertools import chain
 import sys
 import argparse
 import textwrap
 import subprocess
+from collections import OrderedDict
 from datetime import datetime
 from prettytable import PrettyTable
-from collections import OrderedDict
+
+
 # pylint: disable=wrong-import-position, import-error
 sys.path.insert(
     0, str(Path(__file__).resolve().parent / "vtr_flow/scripts/python_libs")
 )
-sys.path.insert(
-    0, str(Path(__file__).resolve().parent / "vtr_flow/scripts")
-)
+sys.path.insert(0, str(Path(__file__).resolve().parent / "vtr_flow/scripts"))
 from run_vtr_task import vtr_command_main as run_vtr_task
 from vtr import (
     find_vtr_file,
-    print_verbose,
     find_vtr_root,
     format_elapsed_time,
-    RawDefaultHelpFormatter
+    RawDefaultHelpFormatter,
 )
-from vtr.error import VtrError
+
 # pylint: enable=wrong-import-position, import-error
 BASIC_VERBOSITY = 1
 
@@ -99,10 +97,7 @@ def vtr_command_argparser(prog=None):
     )
 
     parser.add_argument(
-        "-parse",
-        default=False,
-        action="store_true",
-        help="Only run the parse tests.",
+        "-parse", default=False, action="store_true", help="Only run the parse tests.",
     )
 
     parser.add_argument(
@@ -112,9 +107,11 @@ def vtr_command_argparser(prog=None):
         help="Displays the previous Qor test results",
     )
 
-    parser.add_argument('-script',
-        default='run_vtr_flow.py',
-        help="Determines what flow script is used for the tests")
+    parser.add_argument(
+        "-script",
+        default="run_vtr_flow.py",
+        help="Determines what flow script is used for the tests",
+    )
 
     parser.add_argument(
         "-skip_qor",
@@ -152,7 +149,6 @@ def vtr_command_argparser(prog=None):
         help="Display long task names",
     )
 
-
     return parser
 
 
@@ -161,107 +157,113 @@ def main():
 
 
 def vtr_command_main(arg_list, prog=None):
-    start = datetime.now()
     # Load the arguments
     args = vtr_command_argparser(prog).parse_args(arg_list)
 
     num_func_failures = 0
     num_qor_failures = 0
 
-    try:
-        if args.parse:
-            num_qor_failures = parse_single_test(args, collect_task_list(args))
-        elif args.check_golden:
-            num_qor_failures = 0
-            parse_single_test(args, collect_task_list(args), check = True)
-        elif args.create_golden:
-            # Create golden results
-            num_qor_failures = 0
-            parse_single_test(args, collect_task_list(args), create = True)
-        elif args.calc_geomean:
-            # Calculate geo mean values
-            num_qor_failures = 0
-            parse_single_test(args, collect_task_list(args), calculate = True)
-        elif args.display_qor:
-            num_qor_failures = display_qor(args, collect_task_list(args))
-        else:
-            # Run any ODIN tests
-            print("=============================================")
-            print("    Verilog-to-Routing Regression Testing")
-            print("=============================================")
+    if args.parse:
+        num_qor_failures = parse_single_test(collect_task_list(args))
+    elif args.check_golden:
+        num_qor_failures = 0
+        parse_single_test(collect_task_list(args), check=True)
+    elif args.create_golden:
+        # Create golden results
+        num_qor_failures = 0
+        parse_single_test(collect_task_list(args), create=True)
+    elif args.calc_geomean:
+        # Calculate geo mean values
+        num_qor_failures = 0
+        parse_single_test(collect_task_list(args), calculate=True)
+    elif args.display_qor:
+        num_qor_failures = display_qor(args)
+    else:
+        # Run any ODIN tests
+        print("=============================================")
+        print("    Verilog-to-Routing Regression Testing")
+        print("=============================================")
 
-            for reg_test in args.reg_test:
-                if reg_test.startswith("odin"):
-                    num_func_failures += run_odin_test(args, reg_test)
+        for reg_test in args.reg_test:
+            if reg_test.startswith("odin"):
+                num_func_failures += run_odin_test(args, reg_test)
 
-            # Collect the task lists
-            vtr_task_list_files = collect_task_list(args)
+        # Collect the task lists
+        vtr_task_list_files = collect_task_list(args)
 
-            # Run the actual tasks, recording functionality failures
-            if len(vtr_task_list_files) > 0:
-                num_func_failures += run_tasks(args, vtr_task_list_files)
+        # Run the actual tasks, recording functionality failures
+        if len(vtr_task_list_files) > 0:
+            num_func_failures += run_tasks(args, vtr_task_list_files)
 
-            # Check against golden results
-            if not args.skip_qor and len(vtr_task_list_files) > 0:
-                num_qor_failures += parse_single_test(args, vtr_task_list_files, check=True,calculate = True)
-
-        # Final summary
-        if num_func_failures == 0 and (num_qor_failures == 0 or args.skip_qor):
-            print("All tests passed")
-        elif num_func_failures != 0 or num_qor_failures != 0:
+        # Check against golden results
+        if not args.skip_qor and len(vtr_task_list_files) > 0:
+            num_qor_failures += parse_single_test(
+                vtr_task_list_files, check=True, calculate=True
+            )
             print(
-                "Error: {} tests failed".format(
-                    num_func_failures + num_qor_failures
+                "\nTest '{}' had {} qor test failures".format(
+                    reg_test, num_qor_failures
                 )
             )
+        print("\nTest '{}' had {} run failures\n".format(reg_test, num_func_failures))
+    # Final summary
+    if num_func_failures == 0 and (num_qor_failures == 0 or args.skip_qor):
+        print("All tests passed")
+    elif num_func_failures != 0 or num_qor_failures != 0:
+        print("Error: {} tests failed".format(num_func_failures + num_qor_failures))
 
-        sys.exit(num_func_failures + num_qor_failures)
-    finally:
-        print(
-            "\n took {} (exiting {})".format(
-                format_elapsed_time(datetime.now() - start),
-                num_func_failures + num_qor_failures,
-            ),
-        )
+    sys.exit(num_func_failures + num_qor_failures)
 
-def display_qor(args, task_list):
+
+def display_qor(args):
     for test in args.reg_test:
-        test_dir = Path(find_vtr_root()) / "vtr_flow/tasks/regression_tests"  / test
+        test_dir = Path(find_vtr_root()) / "vtr_flow/tasks/regression_tests" / test
         if not (test_dir / "qor_geomean.txt").is_file():
             print("QoR results do not exist ({}/qor_geomean.txt)".format(str(test_dir)))
             return 1
         print("=" * 121)
-        print("\t" * 6,end = "")
+        print("\t" * 6, end="")
         print("{} QoR Results".format(test))
         print("=" * 121)
         with (test_dir / "qor_geomean.txt").open("r") as results:
             data = OrderedDict()
-            data["revision"] = [8, "","{}"]
-            data["date"] = [7, "","{}"]
-            data["total_runtime"] = [3," s", "%.3f"]
-            data["total_wirelength"] = [2," units", "%.0f"]
-            data["num_clb"] = [4," blocks", "%.2f"]
-            data["min_chan_width"] = [5," tracks", "%.3f"]
-            data["crit_path_delay"] = [6," ns", "%.3f"]
+            data["revision"] = [8, "", "{}"]
+            data["date"] = [7, "", "{}"]
+            data["total_runtime"] = [3, " s", "%.3f"]
+            data["total_wirelength"] = [2, " units", "%.0f"]
+            data["num_clb"] = [4, " blocks", "%.2f"]
+            data["min_chan_width"] = [5, " tracks", "%.3f"]
+            data["crit_path_delay"] = [6, " ns", "%.3f"]
             table = PrettyTable()
             table.field_names = list(data.keys())
             results.readline()
             for line in results.readlines():
-                    info = line.split()
-                    row = []
-                    for key, values in data.items():
-                        if len(info) - 1 < values[0]:
-                            row += [""]
+                info = line.split()
+                row = []
+                for _, values in data.items():
+                    if len(info) - 1 < values[0]:
+                        row += [""]
+                    else:
+                        if values[2] == "{}" or not info[values[0]].isnumeric():
+                            row += [("{}".format(info[values[0]])) + values[1]]
                         else:
-                            if values[2] == "{}":
-                                row += [(values[2].format(info[values[0]]))+values[1]]
-                            else:
-                                row += [(values[2] % float(info[values[0]]))+values[1]]
-                    table.add_row(row)
+                            row += [(values[2] % float(info[values[0]])) + values[1]]
+                table.add_row(row)
             print(table)
     return 0
+
+
 def run_odin_test(args, test_name):
-    odin_reg_script = [find_vtr_file("verify_odin.sh"), "--clean", "-C", find_vtr_file("output_on_error.conf"), "--nb_of_process", str(args.j), "--test", "{}/ODIN_II/regression_test/benchmark/".format(find_vtr_root())]
+    odin_reg_script = [
+        find_vtr_file("verify_odin.sh"),
+        "--clean",
+        "-C",
+        find_vtr_file("output_on_error.conf"),
+        "--nb_of_process",
+        str(args.j),
+        "--test",
+        "{}/ODIN_II/regression_test/benchmark/".format(find_vtr_root()),
+    ]
     if test_name == "odin_reg_full":
         odin_reg_script[-1] += "suite/full_suite"
     elif test_name == "odin_reg_syntax":
@@ -284,12 +286,13 @@ def run_odin_test(args, test_name):
     assert result is not None
     if result != 0:
         # Error
-        print( "FAILED test '{}'".format(test_name))
+        print("FAILED test '{}'".format(test_name))
         return 1
 
     # Pass
     print("PASSED test '{}'".format(test_name))
     return 0
+
 
 def collect_task_list(args):
     vtr_task_list_files = []
@@ -306,6 +309,7 @@ def collect_task_list(args):
             vtr_task_list_files.append(task_list_filepath)
     return vtr_task_list_files
 
+
 def run_tasks(args, task_lists):
     # Call 'vtr task'
     print("Running {}".format(args.reg_test[0]))
@@ -313,22 +317,17 @@ def run_tasks(args, task_lists):
         "-------------------------------------------------------------------------------"
     )
     vtr_task_cmd = ["-l"] + task_lists
-    vtr_task_cmd += [
-        "-j",
-        str(args.j),
-        "-script",
-        args.script
-    ]
+    vtr_task_cmd += ["-j", str(args.j), "-script", args.script]
     if args.show_failures:
         vtr_task_cmd += ["-show_failures"]
     if not args.long_task_names:
         vtr_task_cmd += ["-short_task_names"]
     # Exit code is number of failures
-    print("scripts/run_vtr_task.py {} \n".format(' '.join(map(str, vtr_task_cmd))))
+    print("scripts/run_vtr_task.py {} \n".format(" ".join(map(str, vtr_task_cmd))))
     return run_vtr_task(vtr_task_cmd)
 
 
-def parse_single_test(args, task_lists, check=True, calculate=True, create=False):
+def parse_single_test(task_lists, check=True, calculate=True, create=False):
     vtr_task_cmd = ["-l"] + task_lists
     if check:
         vtr_task_cmd += ["-check_golden"]
@@ -339,6 +338,7 @@ def parse_single_test(args, task_lists, check=True, calculate=True, create=False
 
     # Exit code is number of failures
     return run_vtr_task(vtr_task_cmd)
+
 
 if __name__ == "__main__":
     main()

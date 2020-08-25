@@ -5,11 +5,11 @@ Module to parse the vtr flow results.
 import sys
 from pathlib import Path
 import glob
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import vtr
 
 from collections import OrderedDict
-
 
 
 def main():
@@ -25,7 +25,7 @@ def parse_vtr_flow(arg_list):
     """
     parse_path = arg_list[0]
     parse_config_file = arg_list[1]
-    #print(arg_list,file=(Path(parse_path)/"args.txt").open("w+"))
+    # print(arg_list,file=(Path(parse_path)/"args.txt").open("w+"))
     parse_config_file = vtr.util.verify_file(parse_config_file, "parse config")
 
     extra_params = arg_list[2:]
@@ -79,7 +79,7 @@ def parse_vtr_flow(arg_list):
 
             assert Path(filepath).exists
             metrics[parse_pattern.name()] = "-1"
-            with open(filepath,"r") as file:
+            with open(filepath, "r") as file:
                 for line in file:
                     while line[0] == "#":
                         line = line[1:]
@@ -93,7 +93,7 @@ def parse_vtr_flow(arg_list):
             print("-1", end="\t")
             assert num_files == 0
     print("")
-    #metrics_filepath = str(Path(parse_path) / "parse_results.txt")
+    # metrics_filepath = str(Path(parse_path) / "parse_results.txt")
 
     # vtr.write_tab_delimitted_csv(metrics_filepath, [metrics])
 

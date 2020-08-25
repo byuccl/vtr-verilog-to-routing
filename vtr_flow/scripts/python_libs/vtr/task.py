@@ -6,7 +6,16 @@ from pathlib import PurePath
 from shlex import split
 import itertools
 
-from vtr import VtrError, find_vtr_root, load_list_file, load_parse_results, get_next_run_dir, find_task_dir, load_script_param, get_latest_run_dir
+from vtr import (
+    VtrError,
+    find_vtr_root,
+    load_list_file,
+    load_parse_results,
+    get_next_run_dir,
+    find_task_dir,
+    load_script_param,
+    get_latest_run_dir,
+)
 
 
 class TaskConfig:
@@ -15,24 +24,24 @@ class TaskConfig:
     """
 
     def __init__(
-            self,
-            task_name,
-            config_dir,
-            circuits_dir,
-            archs_dir,
-            circuit_list_add,
-            arch_list_add,
-            parse_file,
-            second_parse_file = None,
-            script_path=None,
-            script_params=None,
-            script_params_common=None,
-            script_params_list_add=None,
-            pass_requirements_file=None,
-            sdc_dir=None,
-            qor_parse_file=None,
-            cmos_tech_behavior=None,
-            pad_file=None,
+        self,
+        task_name,
+        config_dir,
+        circuits_dir,
+        archs_dir,
+        circuit_list_add,
+        arch_list_add,
+        parse_file,
+        second_parse_file=None,
+        script_path=None,
+        script_params=None,
+        script_params_common=None,
+        script_params_list_add=None,
+        pass_requirements_file=None,
+        sdc_dir=None,
+        qor_parse_file=None,
+        cmos_tech_behavior=None,
+        pad_file=None,
     ):
         self.task_name = task_name
         self.config_dir = config_dir
@@ -52,9 +61,20 @@ class TaskConfig:
         self.cmos_tech_behavior = cmos_tech_behavior
         self.pad_file = pad_file
 
-class Job:
 
-    def __init__(self, task_name, arch, circuit, script_params, work_dir, run_command, parse_command, second_parse_command, qor_parse_command):
+class Job:
+    def __init__(
+        self,
+        task_name,
+        arch,
+        circuit,
+        script_params,
+        work_dir,
+        run_command,
+        parse_command,
+        second_parse_command,
+        qor_parse_command,
+    ):
         self._task_name = task_name
         self._arch = arch
         self._circuit = circuit
@@ -73,7 +93,7 @@ class Job:
 
     def circuit(self):
         return self._circuit
-    
+
     def script_params(self):
         return self._script_params
 
@@ -88,10 +108,10 @@ class Job:
 
     def second_parse_command(self):
         return self._second_parse_command
-    
+
     def qor_parse_command(self):
         return self._qor_parse_command
-        
+
     def work_dir(self, run_dir):
         return str(PurePath(run_dir).joinpath(self._work_dir))
 
@@ -189,12 +209,14 @@ def load_task_config(config_file):
     # Create the task config object
     return TaskConfig(**key_values)
 
+
 def shorten_task_names(configs, common_task_prefix):
     new_configs = []
     for config in configs:
-        config.task_name = config.task_name.replace(common_task_prefix,"")
+        config.task_name = config.task_name.replace(common_task_prefix, "")
         new_configs += [config]
     return new_configs
+
 
 def find_longest_task_description(configs):
     longest = 0
@@ -202,143 +224,294 @@ def find_longest_task_description(configs):
         for arch, circuit in itertools.product(config.archs, config.circuits):
             if config.script_params_list_add:
                 for param in config.script_params_list_add:
-                    arch_circuit_len = len(str(PurePath(arch)  / circuit / "common_" / param))
+                    arch_circuit_len = len(
+                        str(PurePath(arch) / circuit / "common_" / param)
+                    )
                     if arch_circuit_len > longest:
                         longest = arch_circuit_len
             else:
-                arch_circuit_len = len(str(PurePath(arch)  / circuit / "common" ))
+                arch_circuit_len = len(str(PurePath(arch) / circuit / "common"))
                 if arch_circuit_len > longest:
                     longest = arch_circuit_len
     return longest
 
 
-def create_jobs(args, configs, longest_name = 0, longest_arch_circuit = 0, after_run = False):
+def create_jobs(args, configs, longest_name=0, longest_arch_circuit=0, after_run=False):
     jobs = []
     for config in configs:
         for arch, circuit in itertools.product(config.archs, config.circuits):
-            golden_results_filepath = str(PurePath(config.config_dir).joinpath("golden_results.txt"))
+            golden_results_filepath = str(
+                PurePath(config.config_dir).joinpath("golden_results.txt")
+            )
             golden_results = load_parse_results(golden_results_filepath)
             abs_arch_filepath = resolve_vtr_source_file(config, arch, config.arch_dir)
-            abs_circuit_filepath = resolve_vtr_source_file(config, circuit, config.circuit_dir)  
+            abs_circuit_filepath = resolve_vtr_source_file(
+                config, circuit, config.circuit_dir
+            )
             work_dir = str(PurePath(arch).joinpath(circuit))
             run_dir = None
             if after_run:
-                run_dir = str(Path(get_latest_run_dir(find_task_dir(args,config))) / work_dir)
+                run_dir = str(
+                    Path(get_latest_run_dir(find_task_dir(args, config))) / work_dir
+                )
             else:
-                run_dir = str(Path(get_next_run_dir(find_task_dir(args,config))) / work_dir)
-            #Collect any extra script params from the config file
-            cmd = [abs_circuit_filepath, abs_arch_filepath]           
+                run_dir = str(
+                    Path(get_next_run_dir(find_task_dir(args, config))) / work_dir
+                )
+            # Collect any extra script params from the config file
+            cmd = [abs_circuit_filepath, abs_arch_filepath]
 
             if hasattr(args, "show_failures") and args.show_failures:
                 cmd += ["-show_failures"]
             cmd += config.script_params if config.script_params else []
             cmd += config.script_params_common if config.script_params_common else []
-            cmd += args.shared_script_params if hasattr(args, "shared_script_params") and  args.shared_script_params else []
-                    
-            #Apply any special config based parameters
+            cmd += (
+                args.shared_script_params
+                if hasattr(args, "shared_script_params") and args.shared_script_params
+                else []
+            )
+
+            # Apply any special config based parameters
             if config.cmos_tech_behavior:
-                cmd += ["-cmos_tech", resolve_vtr_source_file(config, config.cmos_tech_behavior, "tech")]
+                cmd += [
+                    "-cmos_tech",
+                    resolve_vtr_source_file(config, config.cmos_tech_behavior, "tech"),
+                ]
 
             if config.pad_file:
                 cmd += ["--fix_pins", resolve_vtr_source_file(config, config.pad_file)]
-            
+
             if config.sdc_dir:
-                cmd += ["-sdc_file","{}/{}.sdc".format(config.sdc_dir, Path(circuit).stem)]
-            
+                cmd += [
+                    "-sdc_file",
+                    "{}/{}.sdc".format(config.sdc_dir, Path(circuit).stem),
+                ]
+
             parse_cmd = None
             second_parse_cmd = None
             qor_parse_command = None
             if config.parse_file:
-                parse_cmd = [resolve_vtr_source_file(config, config.parse_file, str(PurePath("parse").joinpath("parse_config")))]
+                parse_cmd = [
+                    resolve_vtr_source_file(
+                        config,
+                        config.parse_file,
+                        str(PurePath("parse").joinpath("parse_config")),
+                    )
+                ]
 
             if config.second_parse_file:
-                second_parse_cmd = [resolve_vtr_source_file(config, config.second_parse_file, str(PurePath("parse").joinpath("parse_config")))]
-            
+                second_parse_cmd = [
+                    resolve_vtr_source_file(
+                        config,
+                        config.second_parse_file,
+                        str(PurePath("parse").joinpath("parse_config")),
+                    )
+                ]
+
             if config.qor_parse_file:
-                qor_parse_command = [resolve_vtr_source_file(config, config.qor_parse_file, str(PurePath("parse").joinpath("qor_config")))]
-            #We specify less verbosity to the sub-script
+                qor_parse_command = [
+                    resolve_vtr_source_file(
+                        config,
+                        config.qor_parse_file,
+                        str(PurePath("parse").joinpath("qor_config")),
+                    )
+                ]
+            # We specify less verbosity to the sub-script
             # This keeps the amount of output reasonable
             if hasattr(args, "verbosity") and max(0, args.verbosity - 1):
                 cmd += ["-verbose"]
             if config.script_params_list_add:
                 for value in config.script_params_list_add:
                     temp_dir = run_dir + "/common_{}".format(value.replace(" ", "_"))
-                    num_tabs_before = int((longest_name - len(config.task_name)) / 8) + 1
-                    num_tabs_after = int((longest_arch_circuit - len(work_dir + "/common_{}".format(value.replace(" ", "_")))) / 8)
+
+                    # determine spacing for nice output
+                    num_tabs_before = (
+                        int((longest_name - len(config.task_name)) / 8) + 1
+                    )
+                    num_tabs_after = int(
+                        (
+                            longest_arch_circuit
+                            - len(
+                                work_dir + "/common_{}".format(value.replace(" ", "_"))
+                            )
+                        )
+                        / 8
+                    )
                     spacing_before = "\t" * num_tabs_before
                     spacing_after = "\t" * num_tabs_after
-                    cmd += ["-name","{}:{}{}/common_{}{}".format(config.task_name,spacing_before,work_dir, value.replace(" ", "_"),spacing_after)]
+                    cmd += [
+                        "-name",
+                        "{}:{}{}/common_{}{}".format(
+                            config.task_name,
+                            spacing_before,
+                            work_dir,
+                            value.replace(" ", "_"),
+                            spacing_after,
+                        ),
+                    ]
+
                     cmd += ["-temp_dir", temp_dir]
-                    expected_min_W = ret_expected_min_W(circuit, arch, golden_results, value)
-                    expected_min_W = int(expected_min_W * args.minw_hint_factor) if hasattr(args, "minw_hint_factor") else expected_min_W
+                    expected_min_W = ret_expected_min_W(
+                        circuit, arch, golden_results, value
+                    )
+                    expected_min_W = (
+                        int(expected_min_W * args.minw_hint_factor)
+                        if hasattr(args, "minw_hint_factor")
+                        else expected_min_W
+                    )
                     expected_min_W += expected_min_W % 2
                     if expected_min_W > 0:
-                        cmd += ["--min_route_chan_width_hint", str(expected_min_W)] 
-                    expected_vpr_status = ret_expected_vpr_status(arch, circuit, golden_results, value)
-                    if (expected_vpr_status != "success" and expected_vpr_status != "Unknown"):
+                        cmd += ["--min_route_chan_width_hint", str(expected_min_W)]
+                    expected_vpr_status = ret_expected_vpr_status(
+                        arch, circuit, golden_results, value
+                    )
+                    if (
+                        expected_vpr_status != "success"
+                        and expected_vpr_status != "Unknown"
+                    ):
                         cmd += ["-expect_fail", expected_vpr_status]
                     current_parse_cmd = parse_cmd.copy()
-                    
+
                     if config.parse_file:
-                        current_parse_cmd += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format(load_script_param(value))]
-                        current_parse_cmd.insert(0,run_dir+"/{}".format(load_script_param(value)))
-                    current_second_parse_cmd = second_parse_cmd.copy() if second_parse_cmd else None
-                    
+                        current_parse_cmd += [
+                            "arch={}".format(arch),
+                            "circuit={}".format(circuit),
+                            "script_params={}".format(load_script_param(value)),
+                        ]
+                        current_parse_cmd.insert(
+                            0, run_dir + "/{}".format(load_script_param(value))
+                        )
+                    current_second_parse_cmd = (
+                        second_parse_cmd.copy() if second_parse_cmd else None
+                    )
+
                     if config.second_parse_file:
-                        current_second_parse_cmd += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format(load_script_param(value))]
-                        current_second_parse_cmd.insert(0,run_dir+"/{}".format(load_script_param(value)))
-                    current_qor_parse_command = qor_parse_command.copy() if qor_parse_command else None
+                        current_second_parse_cmd += [
+                            "arch={}".format(arch),
+                            "circuit={}".format(circuit),
+                            "script_params={}".format(load_script_param(value)),
+                        ]
+                        current_second_parse_cmd.insert(
+                            0, run_dir + "/{}".format(load_script_param(value))
+                        )
+                    current_qor_parse_command = (
+                        qor_parse_command.copy() if qor_parse_command else None
+                    )
 
                     if config.qor_parse_file:
-                        current_qor_parse_command += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format("common")]
-                        current_qor_parse_command.insert(0,run_dir+"/{}".format(load_script_param(value)))
+                        current_qor_parse_command += [
+                            "arch={}".format(arch),
+                            "circuit={}".format(circuit),
+                            "script_params={}".format("common"),
+                        ]
+                        current_qor_parse_command.insert(
+                            0, run_dir + "/{}".format(load_script_param(value))
+                        )
 
-                    jobs.append(Job(config.task_name, arch, circuit, load_script_param(value), work_dir + "/{}".format(load_script_param(value)), cmd + value.split(" "), current_parse_cmd, current_second_parse_cmd, current_qor_parse_command))
+                    jobs.append(
+                        Job(
+                            config.task_name,
+                            arch,
+                            circuit,
+                            load_script_param(value),
+                            work_dir + "/{}".format(load_script_param(value)),
+                            cmd + value.split(" "),
+                            current_parse_cmd,
+                            current_second_parse_cmd,
+                            current_qor_parse_command,
+                        )
+                    )
             else:
                 cmd += ["-temp_dir", run_dir + "/common"]
+
+                # determine spacing for nice output
                 num_tabs_before = int((longest_name - len(config.task_name)) / 8) + 1
-                num_tabs_after = int((longest_arch_circuit - len(work_dir)) / 8) 
+                num_tabs_after = int((longest_arch_circuit - len(work_dir)) / 8)
                 spacing_before = "\t" * num_tabs_before
                 spacing_after = "\t" * num_tabs_after
-                cmd += ["-name","{}:{}{}{}".format(config.task_name,spacing_before,work_dir + "/common",spacing_after)]
+                cmd += [
+                    "-name",
+                    "{}:{}{}{}".format(
+                        config.task_name,
+                        spacing_before,
+                        work_dir + "/common",
+                        spacing_after,
+                    ),
+                ]
+
                 expected_min_W = ret_expected_min_W(circuit, arch, golden_results)
-                expected_min_W = int(expected_min_W * args.minw_hint_factor) if hasattr(args, "minw_hint_factor") else expected_min_W
+                expected_min_W = (
+                    int(expected_min_W * args.minw_hint_factor)
+                    if hasattr(args, "minw_hint_factor")
+                    else expected_min_W
+                )
                 expected_min_W += expected_min_W % 2
                 if expected_min_W > 0:
-                    cmd += ["--min_route_chan_width_hint", str(expected_min_W)] 
-                expected_vpr_status = ret_expected_vpr_status(arch, circuit, golden_results)
-                if (expected_vpr_status != "success" and expected_vpr_status != "Unknown"):
+                    cmd += ["--min_route_chan_width_hint", str(expected_min_W)]
+                expected_vpr_status = ret_expected_vpr_status(
+                    arch, circuit, golden_results
+                )
+                if (
+                    expected_vpr_status != "success"
+                    and expected_vpr_status != "Unknown"
+                ):
                     cmd += ["-expect_fail", expected_vpr_status]
                 if config.parse_file:
-                    parse_cmd += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format("common")]
-                    parse_cmd.insert(0,run_dir+"/common")
+                    parse_cmd += [
+                        "arch={}".format(arch),
+                        "circuit={}".format(circuit),
+                        "script_params={}".format("common"),
+                    ]
+                    parse_cmd.insert(0, run_dir + "/common")
 
                 if config.second_parse_file:
-                    second_parse_cmd += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format("common")]
-                    second_parse_cmd.insert(0,run_dir+"/common")\
-
+                    second_parse_cmd += [
+                        "arch={}".format(arch),
+                        "circuit={}".format(circuit),
+                        "script_params={}".format("common"),
+                    ]
+                    second_parse_cmd.insert(0, run_dir + "/common")
                 if config.qor_parse_file:
-                    qor_parse_command += ["arch={}".format(arch),"circuit={}".format(circuit),"script_params={}".format("common")]
-                    qor_parse_command.insert(0,run_dir+"/common")
+                    qor_parse_command += [
+                        "arch={}".format(arch),
+                        "circuit={}".format(circuit),
+                        "script_params={}".format("common"),
+                    ]
+                    qor_parse_command.insert(0, run_dir + "/common")
 
-                jobs.append(Job(config.task_name, arch, circuit, "common", work_dir + "/common", cmd, parse_cmd, second_parse_cmd, qor_parse_command))
-                
+                jobs.append(
+                    Job(
+                        config.task_name,
+                        arch,
+                        circuit,
+                        "common",
+                        work_dir + "/common",
+                        cmd,
+                        parse_cmd,
+                        second_parse_cmd,
+                        qor_parse_command,
+                    )
+                )
+
     return jobs
+
 
 def ret_expected_min_W(circuit, arch, golden_results, script_params=None):
     script_params = load_script_param(script_params)
-    golden_metrics = golden_results.metrics(arch,circuit,script_params)
+    golden_metrics = golden_results.metrics(arch, circuit, script_params)
     if golden_metrics and "min_chan_width" in golden_metrics:
         return int(golden_metrics["min_chan_width"])
     return -1
 
+
 def ret_expected_vpr_status(arch, circuit, golden_results, script_params=None):
     script_params = load_script_param(script_params)
-    golden_metrics = golden_results.metrics(arch,circuit,script_params)
-    if not golden_metrics or 'vpr_status' not in golden_metrics :
+    golden_metrics = golden_results.metrics(arch, circuit, script_params)
+    if not golden_metrics or "vpr_status" not in golden_metrics:
         return "Unknown"
 
-    return golden_metrics['vpr_status']
+    return golden_metrics["vpr_status"]
+
 
 def resolve_vtr_source_file(config, filename, base_dir=""):
     """
@@ -350,33 +523,34 @@ def resolve_vtr_source_file(config, filename, base_dir=""):
         3) base_dir as absolute path (join filename with base_dir)
         4) filename and base_dir are relative paths (join under vtr_root)
     """
-    
-    #Absolute path
+
+    # Absolute path
     if PurePath(filename).is_absolute():
         return filename
 
-    #Under config
+    # Under config
     config_path = Path(config.config_dir)
     assert config_path.is_absolute()
     joined_path = config_path / filename
     if joined_path.exists():
         return str(joined_path)
 
-    #Under base dir
+    # Under base dir
     base_path = Path(base_dir)
     if base_path.is_absolute():
-        #Absolute base
+        # Absolute base
         joined_path = base_path / filename
         if joined_path.exists():
             return str(joined_path)
     else:
-        #Relative base under the VTR flow directory
-        joined_path = Path(find_vtr_root()) / 'vtr_flow' / base_dir / filename
+        # Relative base under the VTR flow directory
+        joined_path = Path(find_vtr_root()) / "vtr_flow" / base_dir / filename
         if joined_path.exists():
             return str(joined_path)
 
-    #Not found
+    # Not found
     raise InspectError("Failed to resolve VTR source file {}".format(filename))
+
 
 def find_task_config_file(task_name):
     """

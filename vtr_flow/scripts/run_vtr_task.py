@@ -15,19 +15,51 @@ from multiprocessing import Queue, Pool, Manager, cpu_count
 from run_vtr_flow import vtr_command_main as run_vtr_flow
 from difflib import SequenceMatcher
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / 'python_libs'))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "python_libs"))
 
-from vtr import load_list_file, find_vtr_file, print_verbose, find_vtr_root, CommandRunner, format_elapsed_time, RawDefaultHelpFormatter, argparse_str2bool, get_next_run_dir, get_latest_run_dir, load_task_config, TaskConfig, find_task_config_file, CommandRunner, load_pass_requirements, load_parse_results, parse_vtr_flow, load_script_param, get_latest_run_number, pretty_print_table, parse_tasks, find_task_dir, find_latest_run_dir, shorten_task_names, find_longest_task_description,  check_golden_results_for_tasks, create_golden_results_for_tasks, create_jobs, calc_geomean, summarize_qor
+from vtr import (
+    load_list_file,
+    find_vtr_file,
+    print_verbose,
+    find_vtr_root,
+    CommandRunner,
+    format_elapsed_time,
+    RawDefaultHelpFormatter,
+    argparse_str2bool,
+    get_next_run_dir,
+    get_latest_run_dir,
+    load_task_config,
+    TaskConfig,
+    find_task_config_file,
+    CommandRunner,
+    load_pass_requirements,
+    load_parse_results,
+    parse_vtr_flow,
+    load_script_param,
+    get_latest_run_number,
+    pretty_print_table,
+    parse_tasks,
+    find_task_dir,
+    find_latest_run_dir,
+    shorten_task_names,
+    find_longest_task_description,
+    check_golden_results_for_tasks,
+    create_golden_results_for_tasks,
+    create_jobs,
+    calc_geomean,
+    summarize_qor,
+)
 from vtr.error import VtrError, InspectError, CommandError
+
 
 def vtr_command_argparser(prog=None):
     description = textwrap.dedent(
-                    """
+        """
                     Runs one or more VTR tasks.
                     """
-                  )
+    )
     epilog = textwrap.dedent(
-                """
+        """
                 Examples
                 --------
 
@@ -47,122 +79,150 @@ def vtr_command_argparser(prog=None):
                 ---------
                     The exit code equals the number failures (i.e. exit code 0 indicates no failures).
                 """
-             )
+    )
 
     parser = argparse.ArgumentParser(
-                prog=prog,
-                description=description,
-                epilog=epilog,
-                formatter_class=RawDefaultHelpFormatter,
-             )
+        prog=prog,
+        description=description,
+        epilog=epilog,
+        formatter_class=RawDefaultHelpFormatter,
+    )
 
     #
     # Major arguments
     #
-    parser.add_argument('task',
-                        nargs="*",
-                        help="Tasks to be run")
+    parser.add_argument("task", nargs="*", help="Tasks to be run")
 
-    parser.add_argument('-l',
-                        nargs="*",
-                        default=[],
-                        metavar="TASK_LIST_FILE",
-                        dest="list_file",
-                        help="A file listing tasks to be run")
+    parser.add_argument(
+        "-l",
+        nargs="*",
+        default=[],
+        metavar="TASK_LIST_FILE",
+        dest="list_file",
+        help="A file listing tasks to be run",
+    )
 
-    parser.add_argument("-parse",
-                        default=False,
-                        action="store_true",
-                        help="Perform only parsing on the latest task run")
+    parser.add_argument(
+        "-parse",
+        default=False,
+        action="store_true",
+        help="Perform only parsing on the latest task run",
+    )
 
-    parser.add_argument("-create_golden",
-                        default=False,
-                        action="store_true",
-                        help="Update or create golden results for the specified task")
+    parser.add_argument(
+        "-create_golden",
+        default=False,
+        action="store_true",
+        help="Update or create golden results for the specified task",
+    )
 
-    parser.add_argument("-check_golden",
-                        default=False,
-                        action="store_true",
-                        help="Check the latest task run against golden results")
+    parser.add_argument(
+        "-check_golden",
+        default=False,
+        action="store_true",
+        help="Check the latest task run against golden results",
+    )
 
-    parser.add_argument('-system',
-                        choices=['local',"scripts"],
-                        default='local',
-                        help="What system to run the tasks on.")
+    parser.add_argument(
+        "-system",
+        choices=["local", "scripts"],
+        default="local",
+        help="What system to run the tasks on.",
+    )
 
-    parser.add_argument('-script',
-                        default='run_vtr_flow.py',
-                        help="Determines what flow script is used for the tasks")
+    parser.add_argument(
+        "-script",
+        default="run_vtr_flow.py",
+        help="Determines what flow script is used for the tasks",
+    )
 
-    parser.add_argument("-short_task_names",
-                        default=False,
-                        action="store_true",
-                        help="Output shorter task names.")
+    parser.add_argument(
+        "-short_task_names",
+        default=False,
+        action="store_true",
+        help="Output shorter task names.",
+    )
 
-    parser.add_argument("-show_failures",
-                        default=False,
-                        action="store_true",
-                        help="Produce additional debug output")
+    parser.add_argument(
+        "-show_failures",
+        default=False,
+        action="store_true",
+        help="Produce additional debug output",
+    )
 
-    parser.add_argument('-j','-p',
-                        default=1,
-                        type=int,
-                        metavar="NUM_PROC",
-                        help="How many processors to use for execution.")
+    parser.add_argument(
+        "-j",
+        "-p",
+        default=1,
+        type=int,
+        metavar="NUM_PROC",
+        help="How many processors to use for execution.",
+    )
 
-    parser.add_argument('-timeout',
-                        default=30*24*60*60, #30 days
-                        metavar="TIMEOUT_SECONDS",
-                        help="Time limit for this script.")
+    parser.add_argument(
+        "-timeout",
+        default=30 * 24 * 60 * 60,  # 30 days
+        metavar="TIMEOUT_SECONDS",
+        help="Time limit for this script.",
+    )
 
-    parser.add_argument("-verbosity",
-                        default=0,
-                        type=int,
-                        help="Sets the verbosity of the script. Higher values produce more output.")
-    
-    parser.add_argument("-minw_hint_factor",
-                        default=1,
-                        type=float,
-                        help="Minimum width hint factor to multiplied by the minimum width hint")
-    
-    parser.add_argument("-revision",
-                        default="",
-                        help="Revision number")
+    parser.add_argument(
+        "-verbosity",
+        default=0,
+        type=int,
+        help="Sets the verbosity of the script. Higher values produce more output.",
+    )
 
-    parser.add_argument("-calc_geomean",
-                        default=False,
-                        action="store_true",
-                        help="QoR geomeans are not computed by default")
+    parser.add_argument(
+        "-minw_hint_factor",
+        default=1,
+        type=float,
+        help="Minimum width hint factor to multiplied by the minimum width hint",
+    )
 
-    parser.add_argument("-print_metadata",
-                        default=True,
-                        type=argparse_str2bool,
-                        help="Print meta-data like command-line arguments and run-time")
+    parser.add_argument("-revision", default="", help="Revision number")
 
-    parser.add_argument('-s',
-                        nargs=argparse.REMAINDER,
-                        default=[],
-                        dest="shared_script_params",
-                        help="Treat the remainder of the command line options as script parameters shared by all tasks")
+    parser.add_argument(
+        "-calc_geomean",
+        default=False,
+        action="store_true",
+        help="QoR geomeans are not computed by default",
+    )
+
+    parser.add_argument(
+        "-print_metadata",
+        default=True,
+        type=argparse_str2bool,
+        help="Print meta-data like command-line arguments and run-time",
+    )
+
+    parser.add_argument(
+        "-s",
+        nargs=argparse.REMAINDER,
+        default=[],
+        dest="shared_script_params",
+        help="Treat the remainder of the command line options as script parameters shared by all tasks",
+    )
 
     return parser
+
 
 def main():
     vtr_command_main(sys.argv[1:])
 
-def vtr_command_main(arg_list, prog=None):
-    start = datetime.now()
 
-    #Load the arguments
+def vtr_command_main(arg_list, prog=None):
+
+    # Load the arguments
     args = vtr_command_argparser(prog).parse_args(arg_list)
 
     args.run = True
     if args.parse or args.create_golden or args.check_golden or args.calc_geomean:
-        #Don't run if parsing or handling golden results
+        # Don't run if parsing or handling golden results
         args.run = False
 
     if args.run:
-        #Always parse if running
+        # Always parse if running
         args.parse = True
 
     num_failed = -1
@@ -174,45 +234,54 @@ def vtr_command_main(arg_list, prog=None):
 
         config_files = [find_task_config_file(task_name) for task_name in task_names]
         configs = []
-        longest_name = 0
-        common_task_prefix = None
+        longest_name = 0  # longest task name for use in creating prettier output
+        common_task_prefix = None  # common task prefix to shorten task names
         for config_file in config_files:
             config = load_task_config(config_file)
             configs += [config]
             if common_task_prefix is None:
                 common_task_prefix = config.task_name
             else:
-                match = SequenceMatcher(None, common_task_prefix, config.task_name).find_longest_match(0, len(common_task_prefix), 0, len(config.task_name))
-                common_task_prefix = common_task_prefix[match.a: match.a + match.size]
+                match = SequenceMatcher(
+                    None, common_task_prefix, config.task_name
+                ).find_longest_match(
+                    0, len(common_task_prefix), 0, len(config.task_name)
+                )
+                common_task_prefix = common_task_prefix[match.a : match.a + match.size]
             if len(config.task_name) > longest_name:
                 longest_name = len(config.task_name)
         if args.short_task_names:
             configs = shorten_task_names(configs, common_task_prefix)
-        longest_arch_circuit = find_longest_task_description(configs)
+        longest_arch_circuit = find_longest_task_description(
+            configs
+        )  # find longest task description for use in creating prettier output
         num_failed = run_tasks(args, configs, longest_name, longest_arch_circuit)
 
     except CommandError as e:
-        print ("Error: {msg}".format(msg=e.msg))
-        print ("\tfull command: ", e.cmd)
-        print ("\treturncode  : ", e.returncode)
-        print ("\tlog file    : ", e.log)
+        print("Error: {msg}".format(msg=e.msg))
+        print("\tfull command: ", e.cmd)
+        print("\treturncode  : ", e.returncode)
+        print("\tlog file    : ", e.log)
     except InspectError as e:
-        print ("Error: {msg}".format(msg=e.msg))
+        print("Error: {msg}".format(msg=e.msg))
         if e.filename:
-            print ("\tfile: ", e.filename)
+            print("\tfile: ", e.filename)
     except VtrError as e:
-        print ("Error:", e.msg)
-    finally:
-        print ("Elapsed time: {}".format(format_elapsed_time(datetime.now() - start), num_failed))
-    if(__name__=="main"):
+        print("Error:", e.msg)
+    if __name__ == "main":
         sys.exit(num_failed)
     return num_failed
 
-def run_tasks(args, configs, longest_name, longest_arch_circuit,):
+
+def run_tasks(
+    args, configs, longest_name, longest_arch_circuit,
+):
     """
     Runs the specified set of tasks (configs)
     """
+    start = datetime.now()
     num_failed = 0
+
     jobs = create_jobs(args, configs, longest_name, longest_arch_circuit)
 
     run_dirs = {}
@@ -221,18 +290,22 @@ def run_tasks(args, configs, longest_name, longest_arch_circuit,):
         task_run_dir = get_next_run_dir(task_dir)
         run_dirs[config.task_name] = task_run_dir
 
-    #We could potentially support other 'run' systems (e.g. a cluster),
-    #rather than just the local machine
+    # We could potentially support other 'run' systems (e.g. a cluster),
+    # rather than just the local machine
     if args.system == "local":
         assert args.j > 0, "Invalid number of processors"
 
-        #Generate the jobs, each corresponding to an invocation of vtr flow
-        
         if args.run:
             num_failed = run_parallel(args, configs, jobs, run_dirs)
+            print(
+                "Elapsed time: {}".format(
+                    format_elapsed_time(datetime.now() - start), num_failed
+                )
+            )
 
         if args.parse:
-            print("Parsing test results...")
+            print("\nParsing test results...")
+            print("scripts/parse_vtr_task.py -l {}".format(args.list_file[0]))
             parse_tasks(args, configs, jobs)
 
         if args.create_golden:
@@ -240,44 +313,43 @@ def run_tasks(args, configs, longest_name, longest_arch_circuit,):
 
         if args.check_golden:
             num_failed += check_golden_results_for_tasks(args, configs)
-        
+
         if args.calc_geomean:
             summarize_qor(args, configs)
             calc_geomean(args, configs)
     elif args.system == "scripts":
         for dir in run_dirs:
-            Path(dir).mkdir(parents = True)
-        run_scripts = create_run_scripts(args,jobs,run_dirs)
+            Path(dir).mkdir(parents=True)
+        run_scripts = create_run_scripts(args, jobs, run_dirs)
         for script in run_scripts:
             print(script)
     else:
         raise VtrError("Unrecognized run system {system}".format(system=args.system))
-
     return num_failed
+
 
 def run_parallel(args, configs, queued_jobs, run_dirs):
     """
     Run each external command in commands with at most args.j commands running in parllel
     """
-    #Determine the run dir for each config
+    # Determine the run dir for each config
 
-
-    #We pop off the jobs of queued_jobs, which python does from the end,
-    #so reverse the list now so we get the expected order. This also ensures
-    #we are working with a copy of the jobs
+    # We pop off the jobs of queued_jobs, which python does from the end,
+    # so reverse the list now so we get the expected order. This also ensures
+    # we are working with a copy of the jobs
     queued_jobs = list(reversed(queued_jobs))
-    #Find the max taskname length for pretty printing
+    # Find the max taskname length for pretty printing
 
     queued_procs = []
     queue = Manager().Queue()
     for job in queued_jobs:
         queued_procs += [(queue, run_dirs, job, args.script)]
-    #Queue of currently running subprocesses
+    # Queue of currently running subprocesses
 
     num_failed = 0
     process_count = args.j if args.j <= cpu_count() else cpu_count()
     with Pool(processes=process_count) as pool:
-        pool.starmap(run_vtr_flow_process,queued_procs)
+        pool.starmap(run_vtr_flow_process, queued_procs)
         pool.close()
         pool.join()
     for proc in queued_procs:
@@ -285,71 +357,95 @@ def run_parallel(args, configs, queued_jobs, run_dirs):
 
     return num_failed
 
+
 def create_run_scripts(args, jobs, run_dirs):
     run_script_files = []
     for job in jobs:
-        run_script_files += [create_run_script(args, job, job.work_dir(run_dirs[job.task_name()]))]
+        run_script_files += [
+            create_run_script(args, job, job.work_dir(run_dirs[job.task_name()]))
+        ]
     return run_script_files
 
+
 def create_run_script(args, job, work_dir):
-    runtime_estimate = ret_expected_runtime(job,work_dir)
-    memory_estimate = ret_expected_memory(job,work_dir)
+    runtime_estimate = ret_expected_runtime(job, work_dir)
+    memory_estimate = ret_expected_memory(job, work_dir)
     if runtime_estimate < 0:
         runtime_estimate = 0
-    
+
     if memory_estimate < 0:
         memory_estimate = 0
 
     human_readable_runtime_est = format_human_readable_time(runtime_estimate)
     human_readable_memory_est = format_human_readable_memory(memory_estimate)
-    Path(work_dir).mkdir(parents = True )
+    Path(work_dir).mkdir(parents=True)
     run_script_file = Path(work_dir) / "vtr_flow.sh"
     with open(run_script_file, "w+") as out_file:
-        print("#!/usr/bin/env bash",file=out_file)
-        print("",file=out_file)
-        print("VTR_RUNTIME_ESTIMATE_SECONDS={}".format(runtime_estimate),file=out_file)
-        print("VTR_MEMORY_ESTIMATE_BYTES={}".format(memory_estimate),file=out_file)
-        print("",file=out_file)
-        print("VTR_RUNTIME_ESTIMATE_HUMAN_READABLE=\"{}\"".format(human_readable_runtime_est),file=out_file)
-        print("VTR_MEMORY_ESTIMATE_HUMAN_READABLE=\"{}\"".format(human_readable_memory_est),file=out_file)
-        print("",file=out_file)
-        print("#We redirect all command output to both stdout and the log file with 'tee'.",file=out_file)
-        print("",file=out_file)
-        print("#Begin I/O redirection",file=out_file)
-        print("{",file=out_file)
-        print("",file=out_file)
-        print("    {} {}".format(args.script, job.run_command()),file=out_file)
-        print("",file=out_file)
-        print("    #The IO redirection occurs in a sub-shell,",file=out_file)
-        print("    #so we need to exit it with the correct code",file=out_file)
-        print("    exit \$?",file=out_file)
-        print("",file=out_file)
-        print("} |& tee vtr_flow.out",file=out_file)
-        print("#End I/O redirection",file=out_file)
-        print("",file=out_file)
-        print("#We used a pipe to redirect IO.",file=out_file)
-        print("#To get the correct exit status we need to exit with the",file=out_file)
-        print("#status of the first element in the pipeline (i.e. the real",file=out_file)
-        print("#command run above)",file=out_file)
-        print("exit \${PIPESTATUS[0]}",file=out_file)
+        print("#!/usr/bin/env bash", file=out_file)
+        print("", file=out_file)
+        print("VTR_RUNTIME_ESTIMATE_SECONDS={}".format(runtime_estimate), file=out_file)
+        print("VTR_MEMORY_ESTIMATE_BYTES={}".format(memory_estimate), file=out_file)
+        print("", file=out_file)
+        print(
+            'VTR_RUNTIME_ESTIMATE_HUMAN_READABLE="{}"'.format(
+                human_readable_runtime_est
+            ),
+            file=out_file,
+        )
+        print(
+            'VTR_MEMORY_ESTIMATE_HUMAN_READABLE="{}"'.format(human_readable_memory_est),
+            file=out_file,
+        )
+        print("", file=out_file)
+        print(
+            "#We redirect all command output to both stdout and the log file with 'tee'.",
+            file=out_file,
+        )
+        print("", file=out_file)
+        print("#Begin I/O redirection", file=out_file)
+        print("{", file=out_file)
+        print("", file=out_file)
+        print("    {} {}".format(args.script, job.run_command()), file=out_file)
+        print("", file=out_file)
+        print("    #The IO redirection occurs in a sub-shell,", file=out_file)
+        print("    #so we need to exit it with the correct code", file=out_file)
+        print("    exit \$?", file=out_file)
+        print("", file=out_file)
+        print("} |& tee vtr_flow.out", file=out_file)
+        print("#End I/O redirection", file=out_file)
+        print("", file=out_file)
+        print("#We used a pipe to redirect IO.", file=out_file)
+        print("#To get the correct exit status we need to exit with the", file=out_file)
+        print(
+            "#status of the first element in the pipeline (i.e. the real", file=out_file
+        )
+        print("#command run above)", file=out_file)
+        print("exit \${PIPESTATUS[0]}", file=out_file)
     return str(run_script_file)
 
-def ret_expected_runtime(job,work_dir):
+
+def ret_expected_runtime(job, work_dir):
     seconds = -1
-    golden_results = load_parse_results(str(Path(work_dir).parent.parent.parent.parent / "config/golden_results.txt"))
+    golden_results = load_parse_results(
+        str(Path(work_dir).parent.parent.parent.parent / "config/golden_results.txt")
+    )
     metrics = golden_results.metrics(job.arch(), job.circuit(), job.script_params())
     if "vtr_flow_elapsed_time" in metrics:
         seconds = float(metrics["vtr_flow_elapsed_time"])
     return seconds
 
-def ret_expected_memory(job,work_dir):
+
+def ret_expected_memory(job, work_dir):
     memory_kib = -1
-    golden_results = load_parse_results(str(Path(work_dir).parent.parent.parent.parent / "config/golden_results.txt"))
+    golden_results = load_parse_results(
+        str(Path(work_dir).parent.parent.parent.parent / "config/golden_results.txt")
+    )
     metrics = golden_results.metrics(job.arch(), job.circuit(), job.script_params())
-    for metric in ['max_odin_mem', 'max_abc_mem', 'max_ace_mem', 'max_vpr_mem']:
+    for metric in ["max_odin_mem", "max_abc_mem", "max_ace_mem", "max_vpr_mem"]:
         if metric in metrics and int(metrics[metric]) > memory_kib:
             memory_kib = int(metrics[metric])
     return memory_kib
+
 
 def format_human_readable_time(seconds):
     if seconds < 60:
@@ -360,10 +456,12 @@ def format_human_readable_time(seconds):
     hour = seconds / 60 / 60
     return "%.0f hours" % hour
 
+
 def format_human_readable_memory(bytes):
     if bytes < 1024 ** 3:
         return "%.2f MiB" % (bytes / (1024 ** 2))
     return "%.2f GiB" % (bytes / (1024 ** 3))
+
 
 def run_vtr_flow_process(queue, run_dirs, job, script):
     work_dir = job.work_dir(run_dirs[job.task_name()])
@@ -371,35 +469,42 @@ def run_vtr_flow_process(queue, run_dirs, job, script):
     log_filepath = str(PurePath(work_dir) / "vtr_flow.log")
     out = None
     vtr_flow_out = str(PurePath(work_dir) / "vtr_flow.out")
-    with open(log_filepath, 'w+') as log_file:
-        with open(vtr_flow_out, 'w+') as out_file:
+    with open(log_filepath, "w+") as log_file:
+        with open(vtr_flow_out, "w+") as out_file:
             with redirect_stdout(out_file):
                 if script == "run_vtr_flow.py":
-                    out = run_vtr_flow(job.run_command(), find_vtr_file("run_vtr_flow.py"))
+                    out = run_vtr_flow(
+                        job.run_command(), find_vtr_file("run_vtr_flow.py")
+                    )
                 else:
-                    out = subprocess.check_call([find_vtr_file(script)] + job.run_command(), cwd=find_vtr_root(),stdout=out_file)
-                    
+                    out = subprocess.call(
+                        [find_vtr_file(script)] + job.run_command(),
+                        cwd=find_vtr_root(),
+                        stdout=out_file,
+                    )
+
         with open(vtr_flow_out, "r") as out_file:
             for line in out_file.readlines():
-                print(line,end="")
+                print(line, end="")
     if out:
         queue.put(1)
     else:
         queue.put(0)
 
+
 def print_log(log_file, indent="    "):
-    #Save position
+    # Save position
     curr_pos = log_file.tell()
 
-    log_file.seek(0) #Rewind to start
+    log_file.seek(0)  # Rewind to start
 
-    #Print log
+    # Print log
     for line in log_file:
         line = line.rstrip()
-        print (indent + line)
-    print ("")
+        print(indent + line)
+    print("")
 
-    #Return to original position
+    # Return to original position
     log_file.seek(curr_pos)
 
 

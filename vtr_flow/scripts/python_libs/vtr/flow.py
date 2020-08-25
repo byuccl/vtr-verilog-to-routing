@@ -31,26 +31,26 @@ class VtrStage(Enum):
 
 # pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
 def run(
-        architecture_file,
-        circuit_file,
-        power_tech_file=None,
-        start_stage=VtrStage.odin,
-        end_stage=VtrStage.vpr,
-        command_runner=vtr.CommandRunner(),
-        temp_dir=Path("./temp"),
-        odin_args=None,
-        abc_args=None,
-        vpr_args=None,
-        keep_intermediate_files=True,
-        keep_result_files=True,
-        min_hard_mult_size=3,
-        min_hard_adder_size=1,
-        check_equivalent=False,
-        check_incremental_sta_consistency=False,
-        use_old_abc_script=False,
-        relax_w_factor=1.3,
-        check_route = False,
-        check_place = False,
+    architecture_file,
+    circuit_file,
+    power_tech_file=None,
+    start_stage=VtrStage.odin,
+    end_stage=VtrStage.vpr,
+    command_runner=vtr.CommandRunner(),
+    temp_dir=Path("./temp"),
+    odin_args=None,
+    abc_args=None,
+    vpr_args=None,
+    keep_intermediate_files=True,
+    keep_result_files=True,
+    min_hard_mult_size=3,
+    min_hard_adder_size=1,
+    check_equivalent=False,
+    check_incremental_sta_consistency=False,
+    use_old_abc_script=False,
+    relax_w_factor=1.3,
+    check_route=False,
+    check_place=False,
 ):
     """
     Runs the VTR CAD flow to map the specified circuit_file onto the target architecture_file
@@ -134,9 +134,13 @@ def run(
     circuit_file = vtr.util.verify_file(circuit_file, "Circuit")
     if architecture_file.suffix != ".xml":
         raise vtr.VtrError(
-            "Expected Architecture file as second argument (was {})".format(architecture_file.name)
+            "Expected Architecture file as second argument (was {})".format(
+                architecture_file.name
+            )
         )
-    power_tech_file = vtr.util.verify_file(power_tech_file, "Power") if power_tech_file else None
+    power_tech_file = (
+        vtr.util.verify_file(power_tech_file, "Power") if power_tech_file else None
+    )
     temp_dir = Path(temp_dir)
     temp_dir.mkdir(parents=True, exist_ok=True)
     netlist_ext = ".blif" if ".eblif" not in circuit_file.suffixes else ".eblif"
@@ -153,7 +157,9 @@ def run(
     lec_base_netlist = circuit_file.name if "blif" in circuit_file.suffixes else None
     # Reference netlist for LEC
 
-    gen_postsynthesis_netlist = temp_dir / (circuit_file.stem + "_post_synthesis" + netlist_ext)
+    gen_postsynthesis_netlist = temp_dir / (
+        circuit_file.stem + "_post_synthesis" + netlist_ext
+    )
 
     # Copy the circuit and architecture
     circuit_copy = temp_dir / circuit_file.name
@@ -169,7 +175,10 @@ def run(
     #
     # RTL Elaboration & Synthesis
     #
-    if should_run_stage(VtrStage.odin, start_stage, end_stage) and circuit_file.suffixes != ".blif":
+    if (
+        should_run_stage(VtrStage.odin, start_stage, end_stage)
+        and circuit_file.suffixes != ".blif"
+    ):
         vtr.odin.run(
             architecture_copy,
             next_stage_netlist,
@@ -183,7 +192,9 @@ def run(
 
         next_stage_netlist = post_odin_netlist
 
-        lec_base_netlist = post_odin_netlist if not lec_base_netlist else lec_base_netlist
+        lec_base_netlist = (
+            post_odin_netlist if not lec_base_netlist else lec_base_netlist
+        )
 
     #
     # Logic Optimization & Technology Mapping
@@ -201,7 +212,9 @@ def run(
         )
 
         next_stage_netlist = post_abc_netlist
-        lec_base_netlist = post_abc_netlist if not lec_base_netlist else lec_base_netlist
+        lec_base_netlist = (
+            post_abc_netlist if not lec_base_netlist else lec_base_netlist
+        )
 
     #
     # Power Activity Estimation
@@ -225,7 +238,9 @@ def run(
 
         # Use ACE's output netlist
         next_stage_netlist = post_ace_netlist
-        lec_base_netlist = post_ace_netlist if not lec_base_netlist else lec_base_netlist
+        lec_base_netlist = (
+            post_ace_netlist if not lec_base_netlist else lec_base_netlist
+        )
 
         # Enable power analysis in VPR
         vpr_args["power"] = True
@@ -247,7 +262,11 @@ def run(
             do_second_run = False
             second_run_args = vpr_args
 
-            if "write_rr_graph" in vpr_args or  "analysis" in vpr_args or "route" in vpr_args:
+            if (
+                "write_rr_graph" in vpr_args
+                or "analysis" in vpr_args
+                or "route" in vpr_args
+            ):
                 do_second_run = True
 
             vtr.vpr.run(
@@ -332,7 +351,11 @@ def run(
 
 
 def delete_intermediate_files(
-    next_stage_netlist, post_ace_activity_file, keep_result_files, temp_dir, power_tech_file,
+    next_stage_netlist,
+    post_ace_activity_file,
+    keep_result_files,
+    temp_dir,
+    power_tech_file,
 ):
     """
         delete intermediate files
