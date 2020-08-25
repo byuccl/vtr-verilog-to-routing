@@ -13,11 +13,11 @@ import argparse
 import csv
 from prettytable import PrettyTable
 from collections import OrderedDict
-
-from vtr.error import VtrError, InspectError, CommandError
+import vtr.error
+from vtr.error import VtrError, CommandError
 
 class RawDefaultHelpFormatter(
-        argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter
+    argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter
 ):
     """
     An argparse formatter which supports both default arguments and raw
@@ -71,7 +71,7 @@ class CommandRunner:
         self._expect_fail = expect_fail
 
     def run_system_command(
-            self, cmd, temp_dir, log_filename=None, expected_return_code=0, indent_depth=0
+        self, cmd, temp_dir, log_filename=None, expected_return_code=0, indent_depth=0
     ):
         """
         Runs the specified command in the system shell.
@@ -94,19 +94,11 @@ class CommandRunner:
         temp_dir = Path(temp_dir) if not isinstance(temp_dir, Path) else temp_dir
 
         # If no log file is specified the name is based on the executed command
-        log_filename = (
-            PurePath(orig_cmd[0]).name + ".out"
-            if log_filename is None
-            else log_filename
-        )
+        log_filename = PurePath(orig_cmd[0]).name + ".out" if log_filename is None else log_filename
 
         # Limit memory usage?
         memory_limit = ["ulimit", "-Sv", "{val};".format(val=self._max_memory_mb)]
-        cmd = (
-            memory_limit + cmd
-            if self._max_memory_mb and check_cmd(memory_limit[0])
-            else cmd
-        )
+        cmd = memory_limit + cmd if self._max_memory_mb and check_cmd(memory_limit[0]) else cmd
 
         # Enable memory tracking?
         memory_tracking = ["/usr/bin/env", "time", "-v"]
@@ -359,9 +351,7 @@ def find_vtr_file(filename, is_executable=False):
     # Since we stripped off the .exe, try looking for the .exe version
     # as a last resort (i.e. on Windows/cygwin)
     if is_executable:
-        result = find_file_from_vtr_root(
-            filename + ".exe", vtr_root, is_executable=is_executable
-        )
+        result = find_file_from_vtr_root(filename + ".exe", vtr_root, is_executable=is_executable)
         if result:
             return result
 
@@ -403,9 +393,7 @@ def find_vtr_root():
 
     if inferred_vtr_root.is_dir():
         return str(inferred_vtr_root)
-    raise VtrError(
-        "Could not find VTR root directory. Try setting VTR_ROOT environment variable."
-    )
+    raise VtrError("Could not find VTR root directory. Try setting VTR_ROOT environment variable.")
 
 
 def file_replace(filename, search_replace_dict):
@@ -493,13 +481,13 @@ def load_config_lines(filepath, allow_includes=True):
                             include_file_abs, allow_includes=allow_includes
                         )
                     else:
-                        raise InspectError(
+                        raise vtr.error.InspectError(
                             "@include not allowed in this file", filepath
                         )
                 else:
                     config_lines.append(line)
     except IOError as error:
-        raise InspectError("Error opening config file ({})".format(error))
+        raise vtr.error.InspectError("Error opening config file ({})".format(error))
 
     return config_lines
 
@@ -514,9 +502,7 @@ def verify_file(file, file_type, should_exist=True):
         file = Path(file)
     if should_exist and not file.is_file():
         raise Exception(
-            "{file_type} file does not exist: {file} ".format(
-                file_type=file_type, file=file
-            )
+            "{file_type} file does not exist: {file} ".format(file_type=file_type, file=file)
         )
 
     return file
