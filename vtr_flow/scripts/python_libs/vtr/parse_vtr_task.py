@@ -73,10 +73,7 @@ def vtr_command_argparser(prog=None):
     )
 
     parser = argparse.ArgumentParser(
-        prog=prog,
-        description=description,
-        epilog=epilog,
-        formatter_class=RawDefaultHelpFormatter,
+        prog=prog, description=description, epilog=epilog, formatter_class=RawDefaultHelpFormatter,
     )
 
     #
@@ -235,9 +232,7 @@ def parse_files(config_jobs, run_dir, flow_metrics_basename="parse_results.txt")
             #
             # The job results file is basically the same format, but excludes the architecture and circuit fields,
             # which we prefix to each line of the task result file
-            job_parse_results_filepath = (
-                Path(job.work_dir(run_dir)) / flow_metrics_basename
-            )
+            job_parse_results_filepath = Path(job.work_dir(run_dir)) / flow_metrics_basename
             if job_parse_results_filepath.exists():
                 with open(job_parse_results_filepath) as in_f:
                     lines = in_f.readlines()
@@ -269,9 +264,7 @@ def create_golden_results_for_task(args, config):
     run_dir = find_latest_run_dir(args, config)
 
     task_results = str(PurePath(run_dir).joinpath("parse_results.txt"))
-    golden_results_filepath = str(
-        PurePath(config.config_dir).joinpath("golden_results.txt")
-    )
+    golden_results_filepath = str(PurePath(config.config_dir).joinpath("golden_results.txt"))
 
     shutil.copy(task_results, golden_results_filepath)
 
@@ -309,9 +302,7 @@ def check_golden_results_for_task(args, config):
 
         # Load the golden reference
         if config.second_parse_file:
-            second_results_filepath = str(
-                PurePath(run_dir).joinpath("parse_results_2.txt")
-            )
+            second_results_filepath = str(PurePath(run_dir).joinpath("parse_results_2.txt"))
             second_results = load_parse_results(second_results_filepath)
             num_qor_failures = check_two_files(
                 args,
@@ -343,11 +334,7 @@ def check_golden_results_for_task(args, config):
         pretty_print_table(task_results_filepath)
 
     if num_qor_failures == 0:
-        print(
-            "{}...[Pass]".format(
-                "/".join(str((Path(config.config_dir).parent)).split("/")[-3:])
-            )
-        )
+        print("{}...[Pass]".format("/".join(str((Path(config.config_dir).parent)).split("/")[-3:])))
 
     return num_qor_failures
 
@@ -365,7 +352,7 @@ def check_two_files(
 ):
     # Verify that the architecture and circuit are specified
     for param in ["architecture", "circuit", "script_params"]:
-        if param not in first_results.primary_keys():
+        if param not in first_results.PRIMARY_KEYS():
             raise InspectError(
                 "Required param '{}' missing from {} results: {}".format(
                     param, first_name, first_results_filepath
@@ -373,7 +360,7 @@ def check_two_files(
                 first_results_filepath,
             )
 
-        if param not in second_results.primary_keys():
+        if param not in second_results.PRIMARY_KEYS():
             raise InspectError(
                 "Required param '{}' missing from {} results: {}".format(
                     param, second_first, second_results_filepath
@@ -393,27 +380,17 @@ def check_two_files(
     pass_requirements = load_pass_requirements(pass_req_filepath)
 
     for metric in pass_requirements.keys():
-        for (
-            (arch, circuit, script_params),
-            result,
-        ) in first_results.all_metrics().items():
+        for ((arch, circuit, script_params), result,) in first_results.all_metrics().items():
             if metric not in result:
                 raise InspectError(
-                    "Required metric '{}' missing from {} results".format(
-                        metric, first_name
-                    ),
+                    "Required metric '{}' missing from {} results".format(metric, first_name),
                     first_results_filepath,
                 )
 
-        for (
-            (arch, circuit, script_params),
-            result,
-        ) in second_results.all_metrics().items():
+        for ((arch, circuit, script_params), result,) in second_results.all_metrics().items():
             if metric not in result:
                 raise InspectError(
-                    "Required metric '{}' missing from {} results".format(
-                        metric, second_name
-                    ),
+                    "Required metric '{}' missing from {} results".format(metric, second_name),
                     second_results_filepath,
                 )
 
@@ -452,19 +429,11 @@ def check_two_files(
         for metric in pass_requirements.keys():
 
             if not metric in second_metrics:
-                print(
-                    "Warning: Metric {} missing from {} results".format(
-                        metric, second_name
-                    )
-                )
+                print("Warning: Metric {} missing from {} results".format(metric, second_name))
                 continue
 
             if not metric in first_metrics:
-                print(
-                    "Warning: Metric {} missing from {} results".format(
-                        metric, first_name
-                    )
-                )
+                print("Warning: Metric {} missing from {} results".format(metric, first_name))
                 continue
 
             try:
@@ -479,17 +448,11 @@ def check_two_files(
                 if first_fail:
                     print(
                         "\n{}...[Fail]".format(
-                            "/".join(
-                                str((Path(config.config_dir).parent)).split("/")[-3:]
-                            )
+                            "/".join(str((Path(config.config_dir).parent)).split("/")[-3:])
                         )
                     )
                     first_fail = False
-                print(
-                    "[Fail]\n{}/{}/{} {} {}".format(
-                        arch, circuit, script_params, metric, reason
-                    )
-                )
+                print("[Fail]\n{}/{}/{} {} {}".format(arch, circuit, script_params, metric, reason))
                 num_qor_failures += 1
     return num_qor_failures
 
@@ -507,18 +470,14 @@ def summarize_qor(args, configs):
     )
     with out_file.open("w+") as out:
         for config in configs:
-            with (Path(find_latest_run_dir(args, config)) / "qor_results.txt").open(
-                "r"
-            ) as in_file:
+            with (Path(find_latest_run_dir(args, config)) / "qor_results.txt").open("r") as in_file:
                 headers = in_file.readline()
                 if first:
                     print("task_name \t{}".format(headers), file=out, end="")
                     first = False
                 for line in in_file:
                     print("{}\t{}".format(config.task_name, line), file=out, end="")
-            pretty_print_table(
-                str(Path(find_latest_run_dir(args, config)) / "qor_results.txt")
-            )
+            pretty_print_table(str(Path(find_latest_run_dir(args, config)) / "qor_results.txt"))
 
 
 def calc_geomean(args, configs):
@@ -548,9 +507,7 @@ def calc_geomean(args, configs):
                 first = False
             lines = summary.readlines()
             print(
-                get_latest_run_number(str(Path(configs[0].config_dir).parent)),
-                file=out,
-                end="\t",
+                get_latest_run_number(str(Path(configs[0].config_dir).parent)), file=out, end="\t",
             )
             for index in range(len(params)):
                 geo_mean = 1
@@ -573,9 +530,7 @@ def calc_geomean(args, configs):
                     print(geo_mean, file=out, end="\t")
                 else:
                     print(
-                        previous_value if previous_value is not None else "-1",
-                        file=out,
-                        end="\t",
+                        previous_value if previous_value is not None else "-1", file=out, end="\t",
                     )
         print(datetime.date(datetime.now()), file=out, end="\t")
         print(args.revision, file=out)
@@ -588,9 +543,7 @@ def find_latest_run_dir(args, config):
 
     if not run_dir:
         raise InspectError(
-            "Failed to find run directory for task '{}' in '{}'".format(
-                config.task_name, task_dir
-            )
+            "Failed to find run directory for task '{}' in '{}'".format(config.task_name, task_dir)
         )
 
     assert Path(run_dir).is_dir()
