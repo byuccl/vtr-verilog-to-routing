@@ -5,27 +5,17 @@ Module to parse the vtr flow results.
 import sys
 from pathlib import Path
 import glob
-
+from collections import OrderedDict
+# pylint: disable=wrong-import-position
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import vtr
-
-from collections import OrderedDict
-
-
-def main():
-    """
-    main for parse_vtr_flow.py
-    """
-    parse_vtr_flow(sys.argv[1:])
-
-
+# pylint: enable=wrong-import-position
 def parse_vtr_flow(arg_list):
     """
         parse vtr flow output
     """
     parse_path = arg_list[0]
     parse_config_file = arg_list[1]
-    # print(arg_list,file=(Path(parse_path)/"args.txt").open("w+"))
     parse_config_file = vtr.util.verify_file(parse_config_file, "parse config")
 
     extra_params = arg_list[2:]
@@ -60,26 +50,22 @@ def parse_vtr_flow(arg_list):
     for parse_pattern in parse_patterns.values():
 
         # We interpret the parse pattern's filename as a glob pattern
-        filepattern = str(Path(parse_path) / parse_pattern.filename())
-        filepaths = glob.glob(filepattern)
+        filepaths = glob.glob(str(Path(parse_path) / parse_pattern.filename()))
 
-        num_files = len(filepaths)
-
-        if num_files > 1:
+        if len(filepaths) > 1:
             raise vtr.InspectError(
                 "File pattern '{}' is ambiguous ({} files matched)".format(
-                    parse_pattern.filename(), num_files
+                    parse_pattern.filename(), len(filepaths)
                 ),
-                num_files,
+                len(filepaths),
                 filepaths,
             )
 
-        if num_files == 1:
-            filepath = filepaths[0]
+        if len(filepaths) == 1:
 
-            assert Path(filepath).exists
+            assert Path(filepaths[0]).exists
             metrics[parse_pattern.name()] = "-1"
-            with open(filepath, "r") as file:
+            with open(filepaths[0], "r") as file:
                 for line in file:
                     while line[0] == "#":
                         line = line[1:]
@@ -91,14 +77,11 @@ def parse_vtr_flow(arg_list):
         else:
             # No matching file, skip
             print("-1", end="\t")
-            assert num_files == 0
+            assert len(filepaths) == 0
     print("")
-    # metrics_filepath = str(Path(parse_path) / "parse_results.txt")
-
-    # vtr.write_tab_delimitted_csv(metrics_filepath, [metrics])
 
     return 0
 
 
 if __name__ == "__main__":
-    main()
+    parse_vtr_flow(sys.argv[1:])

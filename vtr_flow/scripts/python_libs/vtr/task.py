@@ -300,9 +300,9 @@ def create_jobs(args, configs, longest_name=0, longest_arch_circuit=0, after_run
             work_dir = str(PurePath(arch).joinpath(circuit))
 
             run_dir = (
-                str(Path(get_latest_run_dir(find_task_dir(args, config))) / work_dir)
+                str(Path(get_latest_run_dir(find_task_dir(config))) / work_dir)
                 if after_run
-                else str(Path(get_next_run_dir(find_task_dir(args, config))) / work_dir)
+                else str(Path(get_next_run_dir(find_task_dir(config))) / work_dir)
             )
 
             # Collect any extra script params from the config file
