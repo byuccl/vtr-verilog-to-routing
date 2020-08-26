@@ -88,7 +88,9 @@ class RangePassRequirement(PassRequirement):
         super().__init__(metric)
 
         if max_value < min_value:
-            raise InspectError("Invalid range specification (max value larger than min value)")
+            raise InspectError(
+                "Invalid range specification (max value larger than min value)"
+            )
 
         self._min_value = min_value
         self._max_value = max_value
@@ -113,10 +115,16 @@ class RangePassRequirement(PassRequirement):
                 ret_str = "both golden and check are None"
             elif check_value is None:
                 ret_value = False
-                ret_str = ("{} is {}, but check value is None".format(check_string, golden_value),)
+                ret_str = (
+                    "{} is {}, but check value is None".format(
+                        check_string, golden_value
+                    ),
+                )
             else:
                 ret_value = False
-                ret_str = "{} is None, but check value is {}".format(check_string, check_value)
+                ret_str = "{} is None, but check value is {}".format(
+                    check_string, check_value
+                )
             return (ret_value, ret_str)
 
         assert golden_value is not None
@@ -128,12 +136,14 @@ class RangePassRequirement(PassRequirement):
         except ValueError:
             raise InspectError(
                 "Failed to convert {} '{}' to float".format(check_string, golden_value)
-            )
+            ) from ValueError
         original_check_value = check_value
         try:
             check_value = float(check_value)
         except ValueError:
-            raise InspectError("Failed to convert check value '{}' to float".format(check_value))
+            raise InspectError(
+                "Failed to convert check value '{}' to float".format(check_value)
+            ) from ValueError
 
         norm_check_value = None
         if golden_value == 0.0:  # Avoid division by zero
@@ -153,7 +163,11 @@ class RangePassRequirement(PassRequirement):
             False,
             "relative value {} outside of range [{},{}] "
             "and not equal to {} value: {}".format(
-                norm_check_value, self.min_value(), self.max_value(), check_string, golden_value,
+                norm_check_value,
+                self.min_value(),
+                self.max_value(),
+                check_string,
+                golden_value,
             ),
         )
 
@@ -165,7 +179,9 @@ class RangeAbsPassRequirement(PassRequirement):
         super().__init__(metric)
 
         if max_value < min_value:
-            raise InspectError("Invalid range specification (max value larger than min value)")
+            raise InspectError(
+                "Invalid range specification (max value larger than min value)"
+            )
 
         self._min_value = min_value
         self._max_value = max_value
@@ -197,10 +213,14 @@ class RangeAbsPassRequirement(PassRequirement):
                 ret_str = "both {} and check are None".format(check_string)
             elif golden_value is None:
                 ret_value = False
-                ret_str = "{} is None, but check value is {}".format(check_string, check_value)
+                ret_str = "{} is None, but check value is {}".format(
+                    check_string, check_value
+                )
             else:
                 ret_value = False
-                ret_str = "{} is {}, but check value is None".format(check_string, golden_value)
+                ret_str = "{} is {}, but check value is None".format(
+                    check_string, golden_value
+                )
 
             return (ret_value, ret_str)
 
@@ -214,13 +234,15 @@ class RangeAbsPassRequirement(PassRequirement):
         except ValueError:
             raise InspectError(
                 "Failed to convert {} '{}' to float".format(check_string, golden_value)
-            )
+            ) from ValueError
 
         original_check_value = check_value
         try:
             check_value = float(check_value)
         except ValueError:
-            raise InspectError("Failed to convert check value '{}' to float".format(check_value))
+            raise InspectError(
+                "Failed to convert check value '{}' to float".format(check_value)
+            ) from ValueError
 
         # Get relative ratio
         norm_check_value = None
@@ -269,6 +291,7 @@ class ParseResults:
         self._metrics[(arch, circuit, script_param)] = parse_result
 
     def metrics(self, arch, circuit, script_param=None):
+        """ Return individual metric based on the architechure, circuit and script"""
         script_param = load_script_param(script_param)
         if (arch, circuit, script_param) in self._metrics:
             return self._metrics[(arch, circuit, script_param)]
@@ -280,6 +303,9 @@ class ParseResults:
 
 
 def load_script_param(script_param):
+    """
+    Create script parameter string to be used in task names and output.
+    """
     if script_param and "common" not in script_param:
         script_param = "common_" + script_param
     if script_param:
@@ -290,6 +316,10 @@ def load_script_param(script_param):
 
 
 def load_parse_patterns(parse_config_filepath):
+    """
+    Loads the parse patterns from the desired file.
+    These parse patterns are later used to load in the results file
+    """
     parse_patterns = OrderedDict()
 
     for line in load_config_lines(parse_config_filepath):
@@ -307,10 +337,13 @@ def load_parse_patterns(parse_config_filepath):
                 default_value = components[3]
 
             if name not in parse_patterns:
-                parse_patterns[name] = ParsePattern(name, filepath, regex_str, default_value)
+                parse_patterns[name] = ParsePattern(
+                    name, filepath, regex_str, default_value
+                )
             else:
                 raise InspectError(
-                    "Duplicate parse pattern name '{}'".format(name), parse_config_filepath,
+                    "Duplicate parse pattern name '{}'".format(name),
+                    parse_config_filepath,
                 )
 
         else:
@@ -322,6 +355,9 @@ def load_parse_patterns(parse_config_filepath):
 
 
 def load_pass_requirements(pass_requirements_filepath):
+    """
+    Load the pass requirements from particular file
+    """
     parse_patterns = OrderedDict()
 
     for line in load_config_lines(pass_requirements_filepath):
@@ -338,7 +374,8 @@ def load_pass_requirements(pass_requirements_filepath):
 
         if metric in parse_patterns:
             raise InspectError(
-                "Duplicate pass requirement for '{}'".format(metric), pass_requirements_filepath,
+                "Duplicate pass requirement for '{}'".format(metric),
+                pass_requirements_filepath,
             )
 
         func, params_str = expr.split("(")
@@ -377,7 +414,9 @@ def load_pass_requirements(pass_requirements_filepath):
             parse_patterns[metric] = EqualPassRequirement(metric)
         else:
             raise InspectError(
-                "Unexpected pass requirement function '{}' for metric '{}'".format(func, metric),
+                "Unexpected pass requirement function '{}' for metric '{}'".format(
+                    func, metric
+                ),
                 pass_requirements_filepath,
             )
 
@@ -385,6 +424,9 @@ def load_pass_requirements(pass_requirements_filepath):
 
 
 def load_parse_results(parse_results_filepath):
+    """
+    Load the results from the parsed result file.
+    """
     header = []
 
     parse_results = ParseResults()
@@ -453,7 +495,9 @@ def determine_lut_size(architecture_file):
             lut_size = max(lut_size, input_width)
 
     if saw_blif_names and lut_size == 0:
-        raise InspectError("Could not identify valid LUT size (K)", filename=architecture_file)
+        raise InspectError(
+            "Could not identify valid LUT size (K)", filename=architecture_file
+        )
 
     return lut_size
 
@@ -480,7 +524,9 @@ def determine_memory_addr_width(architecture_file):
                     mem_addr_width = max(mem_addr_width, input_width)
 
     if saw_ram and mem_addr_width == 0:
-        raise InspectError("Could not identify RAM block address width", filename=architecture_file)
+        raise InspectError(
+            "Could not identify RAM block address width", filename=architecture_file
+        )
 
     return mem_addr_width
 
@@ -489,7 +535,9 @@ def determine_min_w(log_filename):
     """
         determines the miniumum width.
     """
-    min_w_regex = re.compile(r"\s*Best routing used a channel width factor of (?P<min_w>\d+).")
+    min_w_regex = re.compile(
+        r"\s*Best routing used a channel width factor of (?P<min_w>\d+)."
+    )
     with open(log_filename) as file:
         for line in file:
             match = min_w_regex.match(line)

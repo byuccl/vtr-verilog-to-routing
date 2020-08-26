@@ -8,6 +8,7 @@ import itertools
 
 from vtr import (
     VtrError,
+    InspectError,
     find_vtr_root,
     load_list_file,
     load_parse_results,
@@ -17,7 +18,7 @@ from vtr import (
     get_latest_run_dir,
 )
 
-
+# pylint: disable=too-many-instance-attributes, too-many-arguments, too-many-locals,too-few-public-methods
 class TaskConfig:
     """
     An object representing a task config file
@@ -60,9 +61,13 @@ class TaskConfig:
         self.qor_parse_file = qor_parse_file
         self.cmos_tech_behavior = cmos_tech_behavior
         self.pad_file = pad_file
-
+# pylint: enable=too-few-public-methods
 
 class Job:
+    """
+    A class to store the nessesary information for a job that needs to be run.
+    """
+
     def __init__(
         self,
         task_name,
@@ -86,35 +91,66 @@ class Job:
         self._work_dir = work_dir
 
     def task_name(self):
+        """
+        return the task name of the job
+        """
         return self._task_name
 
     def arch(self):
+        """
+        return the architecture file name of the job
+        """
         return self._arch
 
     def circuit(self):
+        """
+        return the circuit file name of the job
+        """
         return self._circuit
 
     def script_params(self):
+        """
+        return the script parameter of the job
+        """
         return self._script_params
 
     def job_name(self):
+        """
+        return the name of the job
+        """
         return str(PurePath(self.arch()) / self.circuit() / self.script_params())
 
     def run_command(self):
+        """
+        return the run command of the job
+        """
         return self._run_command
 
     def parse_command(self):
+        """
+        return the parse command of the job
+        """
         return self._parse_command
 
     def second_parse_command(self):
+        """
+        return the second parse command of the job
+        """
         return self._second_parse_command
 
     def qor_parse_command(self):
+        """
+        return the qor parse command of the job
+        """
         return self._qor_parse_command
 
     def work_dir(self, run_dir):
+        """
+        return the work directory of the job
+        """
         return str(PurePath(run_dir).joinpath(self._work_dir))
 
+# pylint: enable=too-many-instance-attributes
 
 def load_task_config(config_file):
     """
@@ -192,14 +228,7 @@ def load_task_config(config_file):
     if "script_params_common" in key_values:
         key_values["script_params_common"] = split(key_values["script_params_common"])
 
-    # Check that all required fields were specified
-    for required_key in required_keys:
-        if required_key not in key_values:
-            raise VtrError(
-                "Missing required key '{key}' in config file {file}".format(
-                    key=required_key, file=config_file
-                )
-            )
+    check_required_feilds(config_file, required_keys, key_values)
 
     # Useful meta-data about the config
     config_dir = str(Path(config_file).parent)
@@ -209,8 +238,22 @@ def load_task_config(config_file):
     # Create the task config object
     return TaskConfig(**key_values)
 
+def check_required_feilds(config_file, required_keys, key_values):
+    """
+    Check that all required fields were specified
+    """
+    for required_key in required_keys:
+        if required_key not in key_values:
+            raise VtrError(
+                "Missing required key '{key}' in config file {file}".format(
+                    key=required_key, file=config_file
+                )
+            )
 
 def shorten_task_names(configs, common_task_prefix):
+    """
+    Shorten the task names of the configs by remove the common task prefix.
+    """
     new_configs = []
     for config in configs:
         config.task_name = config.task_name.replace(common_task_prefix, "")
@@ -219,6 +262,10 @@ def shorten_task_names(configs, common_task_prefix):
 
 
 def find_longest_task_description(configs):
+    """
+    Finds the longest task description in the list of configurations.
+    This is used for output spacing.
+    """
     longest = 0
     for config in configs:
         for arch, circuit in itertools.product(config.archs, config.circuits):
@@ -237,27 +284,27 @@ def find_longest_task_description(configs):
 
 
 def create_jobs(args, configs, longest_name=0, longest_arch_circuit=0, after_run=False):
+    """
+    Create the jobs to be executed depending on the configs.
+    """
     jobs = []
     for config in configs:
         for arch, circuit in itertools.product(config.archs, config.circuits):
-            golden_results_filepath = str(
-                PurePath(config.config_dir).joinpath("golden_results.txt")
+            golden_results = load_parse_results(
+                str(PurePath(config.config_dir).joinpath("golden_results.txt"))
             )
-            golden_results = load_parse_results(golden_results_filepath)
             abs_arch_filepath = resolve_vtr_source_file(config, arch, config.arch_dir)
             abs_circuit_filepath = resolve_vtr_source_file(
                 config, circuit, config.circuit_dir
             )
             work_dir = str(PurePath(arch).joinpath(circuit))
-            run_dir = None
-            if after_run:
-                run_dir = str(
-                    Path(get_latest_run_dir(find_task_dir(args, config))) / work_dir
-                )
-            else:
-                run_dir = str(
-                    Path(get_next_run_dir(find_task_dir(args, config))) / work_dir
-                )
+
+            run_dir = (
+                str(Path(get_latest_run_dir(find_task_dir(args, config))) / work_dir)
+                if after_run
+                else str(Path(get_next_run_dir(find_task_dir(args, config))) / work_dir)
+            )
+
             # Collect any extra script params from the config file
             cmd = [abs_circuit_filepath, abs_arch_filepath]
 
@@ -278,8 +325,11 @@ def create_jobs(args, configs, longest_name=0, longest_arch_circuit=0, after_run
                     resolve_vtr_source_file(config, config.cmos_tech_behavior, "tech"),
                 ]
 
-            if config.pad_file:
-                cmd += ["--fix_pins", resolve_vtr_source_file(config, config.pad_file)]
+            cmd += (
+                ["--fix_pins", resolve_vtr_source_file(config, config.pad_file)]
+                if config.pad_file
+                else []
+            )
 
             if config.sdc_dir:
                 cmd += [
@@ -322,181 +372,149 @@ def create_jobs(args, configs, longest_name=0, longest_arch_circuit=0, after_run
                 cmd += ["-verbose"]
             if config.script_params_list_add:
                 for value in config.script_params_list_add:
-                    temp_dir = run_dir + "/common_{}".format(value.replace(" ", "_"))
-
-                    # determine spacing for nice output
-                    num_tabs_before = (
-                        int((longest_name - len(config.task_name)) / 8) + 1
-                    )
-                    num_tabs_after = int(
-                        (
-                            longest_arch_circuit
-                            - len(
-                                work_dir + "/common_{}".format(value.replace(" ", "_"))
-                            )
-                        )
-                        / 8
-                    )
-                    spacing_before = "\t" * num_tabs_before
-                    spacing_after = "\t" * num_tabs_after
-                    cmd += [
-                        "-name",
-                        "{}:{}{}/common_{}{}".format(
-                            config.task_name,
-                            spacing_before,
-                            work_dir,
-                            value.replace(" ", "_"),
-                            spacing_after,
-                        ),
-                    ]
-
-                    cmd += ["-temp_dir", temp_dir]
-                    expected_min_W = ret_expected_min_W(
-                        circuit, arch, golden_results, value
-                    )
-                    expected_min_W = (
-                        int(expected_min_W * args.minw_hint_factor)
-                        if hasattr(args, "minw_hint_factor")
-                        else expected_min_W
-                    )
-                    expected_min_W += expected_min_W % 2
-                    if expected_min_W > 0:
-                        cmd += ["--min_route_chan_width_hint", str(expected_min_W)]
-                    expected_vpr_status = ret_expected_vpr_status(
-                        arch, circuit, golden_results, value
-                    )
-                    if (
-                        expected_vpr_status != "success"
-                        and expected_vpr_status != "Unknown"
-                    ):
-                        cmd += ["-expect_fail", expected_vpr_status]
-                    current_parse_cmd = parse_cmd.copy()
-
-                    if config.parse_file:
-                        current_parse_cmd += [
-                            "arch={}".format(arch),
-                            "circuit={}".format(circuit),
-                            "script_params={}".format(load_script_param(value)),
-                        ]
-                        current_parse_cmd.insert(
-                            0, run_dir + "/{}".format(load_script_param(value))
-                        )
-                    current_second_parse_cmd = (
-                        second_parse_cmd.copy() if second_parse_cmd else None
-                    )
-
-                    if config.second_parse_file:
-                        current_second_parse_cmd += [
-                            "arch={}".format(arch),
-                            "circuit={}".format(circuit),
-                            "script_params={}".format(load_script_param(value)),
-                        ]
-                        current_second_parse_cmd.insert(
-                            0, run_dir + "/{}".format(load_script_param(value))
-                        )
-                    current_qor_parse_command = (
-                        qor_parse_command.copy() if qor_parse_command else None
-                    )
-
-                    if config.qor_parse_file:
-                        current_qor_parse_command += [
-                            "arch={}".format(arch),
-                            "circuit={}".format(circuit),
-                            "script_params={}".format("common"),
-                        ]
-                        current_qor_parse_command.insert(
-                            0, run_dir + "/{}".format(load_script_param(value))
-                        )
-
                     jobs.append(
-                        Job(
-                            config.task_name,
-                            arch,
+                        create_job(
+                            args,
+                            config,
                             circuit,
-                            load_script_param(value),
-                            work_dir + "/{}".format(load_script_param(value)),
-                            cmd + value.split(" "),
-                            current_parse_cmd,
-                            current_second_parse_cmd,
-                            current_qor_parse_command,
+                            arch,
+                            value,
+                            cmd,
+                            parse_cmd,
+                            second_parse_cmd,
+                            qor_parse_command,
+                            work_dir,
+                            run_dir,
+                            longest_name,
+                            longest_arch_circuit,
+                            golden_results,
                         )
                     )
             else:
-                cmd += ["-temp_dir", run_dir + "/common"]
-
-                # determine spacing for nice output
-                num_tabs_before = int((longest_name - len(config.task_name)) / 8) + 1
-                num_tabs_after = int((longest_arch_circuit - len(work_dir)) / 8)
-                spacing_before = "\t" * num_tabs_before
-                spacing_after = "\t" * num_tabs_after
-                cmd += [
-                    "-name",
-                    "{}:{}{}{}".format(
-                        config.task_name,
-                        spacing_before,
-                        work_dir + "/common",
-                        spacing_after,
-                    ),
-                ]
-
-                expected_min_W = ret_expected_min_W(circuit, arch, golden_results)
-                expected_min_W = (
-                    int(expected_min_W * args.minw_hint_factor)
-                    if hasattr(args, "minw_hint_factor")
-                    else expected_min_W
-                )
-                expected_min_W += expected_min_W % 2
-                if expected_min_W > 0:
-                    cmd += ["--min_route_chan_width_hint", str(expected_min_W)]
-                expected_vpr_status = ret_expected_vpr_status(
-                    arch, circuit, golden_results
-                )
-                if (
-                    expected_vpr_status != "success"
-                    and expected_vpr_status != "Unknown"
-                ):
-                    cmd += ["-expect_fail", expected_vpr_status]
-                if config.parse_file:
-                    parse_cmd += [
-                        "arch={}".format(arch),
-                        "circuit={}".format(circuit),
-                        "script_params={}".format("common"),
-                    ]
-                    parse_cmd.insert(0, run_dir + "/common")
-
-                if config.second_parse_file:
-                    second_parse_cmd += [
-                        "arch={}".format(arch),
-                        "circuit={}".format(circuit),
-                        "script_params={}".format("common"),
-                    ]
-                    second_parse_cmd.insert(0, run_dir + "/common")
-                if config.qor_parse_file:
-                    qor_parse_command += [
-                        "arch={}".format(arch),
-                        "circuit={}".format(circuit),
-                        "script_params={}".format("common"),
-                    ]
-                    qor_parse_command.insert(0, run_dir + "/common")
-
                 jobs.append(
-                    Job(
-                        config.task_name,
-                        arch,
+                    create_job(
+                        args,
+                        config,
                         circuit,
-                        "common",
-                        work_dir + "/common",
+                        arch,
+                        None,
                         cmd,
                         parse_cmd,
                         second_parse_cmd,
                         qor_parse_command,
+                        work_dir,
+                        run_dir,
+                        longest_name,
+                        longest_arch_circuit,
+                        golden_results,
                     )
                 )
 
     return jobs
 
 
-def ret_expected_min_W(circuit, arch, golden_results, script_params=None):
+def create_job(
+    args,
+    config,
+    circuit,
+    arch,
+    param,
+    cmd,
+    parse_cmd,
+    second_parse_cmd,
+    qor_parse_command,
+    work_dir,
+    run_dir,
+    longest_name,
+    longest_arch_circuit,
+    golden_results,
+):
+    """
+    Create an individual job with the specified parameters
+    """
+    param_string = "common" + (("_" + param.replace(" ", "_")) if param else "")
+    if not param:
+        param = "common"
+    # determine spacing for nice output
+    num_spaces_before = int((longest_name - len(config.task_name))) + 8
+    num_spaces_after = int(
+        (longest_arch_circuit - len(work_dir + "/{}".format(param_string)))
+    )
+    cmd += [
+        "-name",
+        "{}:{}{}/{}{}".format(
+            config.task_name,
+            " " * num_spaces_before,
+            work_dir,
+            param_string,
+            " " * num_spaces_after,
+        ),
+    ]
+
+    cmd += ["-temp_dir", run_dir + "/{}".format(param_string)]
+    expected_min_w = ret_expected_min_w(circuit, arch, golden_results, param)
+    expected_min_w = (
+        int(expected_min_w * args.minw_hint_factor)
+        if hasattr(args, "minw_hint_factor")
+        else expected_min_w
+    )
+    expected_min_w += expected_min_w % 2
+    if expected_min_w > 0:
+        cmd += ["--min_route_chan_width_hint", str(expected_min_w)]
+    expected_vpr_status = ret_expected_vpr_status(arch, circuit, golden_results, param)
+    if expected_vpr_status not in ("success", "Unknown"):
+        cmd += ["-expect_fail", expected_vpr_status]
+    current_parse_cmd = parse_cmd.copy()
+
+    if config.parse_file:
+        current_parse_cmd += [
+            "arch={}".format(arch),
+            "circuit={}".format(circuit),
+            "script_params={}".format(load_script_param(param)),
+        ]
+        current_parse_cmd.insert(0, run_dir + "/{}".format(load_script_param(param)))
+    current_second_parse_cmd = second_parse_cmd.copy() if second_parse_cmd else None
+
+    if config.second_parse_file:
+        current_second_parse_cmd += [
+            "arch={}".format(arch),
+            "circuit={}".format(circuit),
+            "script_params={}".format(load_script_param(param)),
+        ]
+        current_second_parse_cmd.insert(
+            0, run_dir + "/{}".format(load_script_param(param))
+        )
+    current_qor_parse_command = qor_parse_command.copy() if qor_parse_command else None
+
+    if config.qor_parse_file:
+        current_qor_parse_command += [
+            "arch={}".format(arch),
+            "circuit={}".format(circuit),
+            "script_params={}".format("common"),
+        ]
+        current_qor_parse_command.insert(
+            0, run_dir + "/{}".format(load_script_param(param))
+        )
+    current_cmd = cmd.copy()
+    if param_string != "common":
+        current_cmd += param.split(" ")
+    return Job(
+        config.task_name,
+        arch,
+        circuit,
+        param_string,
+        work_dir + "/" + param_string,
+        current_cmd,
+        current_parse_cmd,
+        current_second_parse_cmd,
+        current_qor_parse_command,
+    )
+# pylint: enable=too-many-arguments,too-many-locals
+
+def ret_expected_min_w(circuit, arch, golden_results, script_params=None):
+    """
+    Retrive the expected minimum channel width from the golden results.
+    """
     script_params = load_script_param(script_params)
     golden_metrics = golden_results.metrics(arch, circuit, script_params)
     if golden_metrics and "min_chan_width" in golden_metrics:
@@ -505,6 +523,9 @@ def ret_expected_min_W(circuit, arch, golden_results, script_params=None):
 
 
 def ret_expected_vpr_status(arch, circuit, golden_results, script_params=None):
+    """
+    Retrive the expected VPR status from the golden_results.
+    """
     script_params = load_script_param(script_params)
     golden_metrics = golden_results.metrics(arch, circuit, script_params)
     if not golden_metrics or "vpr_status" not in golden_metrics:

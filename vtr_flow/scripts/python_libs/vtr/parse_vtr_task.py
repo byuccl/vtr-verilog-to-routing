@@ -352,7 +352,7 @@ def check_two_files(
 ):
     # Verify that the architecture and circuit are specified
     for param in ["architecture", "circuit", "script_params"]:
-        if param not in first_results.PRIMARY_KEYS():
+        if param not in first_results.PRIMARY_KEYS:
             raise InspectError(
                 "Required param '{}' missing from {} results: {}".format(
                     param, first_name, first_results_filepath
@@ -360,7 +360,7 @@ def check_two_files(
                 first_results_filepath,
             )
 
-        if param not in second_results.PRIMARY_KEYS():
+        if param not in second_results.PRIMARY_KEYS:
             raise InspectError(
                 "Required param '{}' missing from {} results: {}".format(
                     param, second_first, second_results_filepath

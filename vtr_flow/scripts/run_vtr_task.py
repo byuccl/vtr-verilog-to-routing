@@ -327,8 +327,7 @@ def run_parallel(args, configs, queued_jobs, run_dirs):
     # Queue of currently running subprocesses
 
     num_failed = 0
-    process_count = args.j if args.j <= cpu_count() else cpu_count()
-    with Pool(processes=process_count) as pool:
+    with Pool(processes=args.j) as pool:
         pool.starmap(run_vtr_flow_process, queued_procs)
         pool.close()
         pool.join()
