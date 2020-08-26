@@ -368,7 +368,7 @@ def check_two_files(
                 second_results_filepath,
             )
 
-    # Verify that all params and pass requirement metric are included in both the  result files
+    # Verify that all params and pass requirement metric are included in both the result files
     # We do not worry about non-pass_requriements elements being different or missing
     pass_req_filepath = str(
         PurePath(find_vtr_root())

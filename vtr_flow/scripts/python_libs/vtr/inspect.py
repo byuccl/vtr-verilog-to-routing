@@ -64,7 +64,7 @@ class PassRequirement(abc.ABC):
 
 
 class EqualPassRequirement(PassRequirement):
-    """ Used to check of parsed value is equal to golden value """
+    """ Used to check if parsed value is equal to golden value """
 
     def type(self):
         return "Equal"
@@ -82,7 +82,7 @@ class EqualPassRequirement(PassRequirement):
 
 
 class RangePassRequirement(PassRequirement):
-    """ Used to check of parsed value is within a golden range """
+    """ Used to check if parsed value is within a range """
 
     def __init__(self, metric, min_value=None, max_value=None):
         super().__init__(metric)
@@ -107,7 +107,7 @@ class RangePassRequirement(PassRequirement):
         return self._max_value
 
     def check_passed(self, golden_value, check_value, check_string="golden value"):
-        """ Check if parsed value is within golden value """
+        """ Check if parsed value is within a range or equal to golden value """
 
         if golden_value is None or check_value is None:
             if golden_value is None and check_value is None:
@@ -204,7 +204,7 @@ class RangeAbsPassRequirement(PassRequirement):
         return self._abs_threshold
 
     def check_passed(self, golden_value, check_value, check_string="golden value"):
-        """ Check if parsed value is within acceptable range or absolute value """
+        """ Check if parsed value is within acceptable range, absolute value or equal to golden value """
 
         # Check for nulls
         if golden_value is None or check_value is None:

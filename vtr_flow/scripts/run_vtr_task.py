@@ -12,7 +12,7 @@ import textwrap
 import subprocess
 from datetime import datetime
 from contextlib import redirect_stdout
-from multiprocessing import Pool, Manager, cpu_count
+from multiprocessing import Pool, Manager
 from difflib import SequenceMatcher
 
 from run_vtr_flow import vtr_command_main as run_vtr_flow
@@ -47,6 +47,7 @@ from vtr.error import VtrError, InspectError, CommandError
 
 
 def vtr_command_argparser(prog=None):
+    """ Argument parse for run_vtr_task """
 
     description = textwrap.dedent(
         """
@@ -198,7 +199,7 @@ def vtr_command_argparser(prog=None):
 
 
 def vtr_command_main(arg_list, prog=None):
-
+    """ Run the vtr tasks given and the tasks in the lists given """
     # Load the arguments
     args = vtr_command_argparser(prog).parse_args(arg_list)
 
@@ -278,9 +279,9 @@ def run_tasks(
         assert args.j > 0, "Invalid number of processors"
 
         if args.run:
-            num_failed = run_parallel(args, configs, jobs, run_dirs)
+            num_failed = run_parallel(args, jobs, run_dirs)
             print(
-                "Elapsed time: {}".format(format_elapsed_time(datetime.now() - start), num_failed)
+                "Elapsed time: {}".format(format_elapsed_time(datetime.now() - start))
             )
 
         if args.parse:
@@ -308,7 +309,7 @@ def run_tasks(
     return num_failed
 
 
-def run_parallel(args, configs, queued_jobs, run_dirs):
+def run_parallel(args, queued_jobs, run_dirs):
     """
     Run each external command in commands with at most args.j commands running in parllel
     """
@@ -331,7 +332,7 @@ def run_parallel(args, configs, queued_jobs, run_dirs):
         pool.starmap(run_vtr_flow_process, queued_procs)
         pool.close()
         pool.join()
-    for proc in queued_procs:
+    for _ in queued_procs:
         num_failed += queue.get()
 
     return num_failed
@@ -401,6 +402,7 @@ def create_run_script(args, job, work_dir):
 
 
 def ret_expected_runtime(job, work_dir):
+    """ Returns the expected run-time (in seconds) of the specified run, or -1 if unkown """
     seconds = -1
     golden_results = load_parse_results(
         str(Path(work_dir).parent.parent.parent.parent / "config/golden_results.txt")
@@ -412,6 +414,7 @@ def ret_expected_runtime(job, work_dir):
 
 
 def ret_expected_memory(job, work_dir):
+    """ Returns the expected memory usage (in bytes) of the specified run, or -1 if unkown """
     memory_kib = -1
     golden_results = load_parse_results(
         str(Path(work_dir).parent.parent.parent.parent / "config/golden_results.txt")
@@ -424,6 +427,7 @@ def ret_expected_memory(job, work_dir):
 
 
 def format_human_readable_time(seconds):
+    """ format the number of seconds given as a human readable value """
     if seconds < 60:
         return "%.0f seconds" % seconds
     if seconds < 3600:
@@ -434,52 +438,41 @@ def format_human_readable_time(seconds):
 
 
 def format_human_readable_memory(num_bytes):
+    """ format the number of bytes given as a human readable value """
     if num_bytes < 1024 ** 3:
         return "%.2f MiB" % (num_bytes / (1024 ** 2))
     return "%.2f GiB" % (num_bytes / (1024 ** 3))
 
 
 def run_vtr_flow_process(queue, run_dirs, job, script):
+    """
+    This is the function that the multiprocessing calls.
+    It runs the vtr flow and allerts the multiprocessor through a queue if the flow failed.
+    """
     work_dir = job.work_dir(run_dirs[job.task_name()])
     Path(work_dir).mkdir(parents=True, exist_ok=True)
-    log_filepath = str(PurePath(work_dir) / "vtr_flow.log")
     out = None
     vtr_flow_out = str(PurePath(work_dir) / "vtr_flow.out")
-    with open(log_filepath, "w+") as log_file:
-        with open(vtr_flow_out, "w+") as out_file:
-            with redirect_stdout(out_file):
-                if script == "run_vtr_flow.py":
-                    out = run_vtr_flow(job.run_command(), find_vtr_file("run_vtr_flow.py"))
-                else:
-                    out = subprocess.call(
-                        [find_vtr_file(script)] + job.run_command(),
-                        cwd=find_vtr_root(),
-                        stdout=out_file,
-                    )
+    with open(vtr_flow_out, "w+") as out_file:
+        with redirect_stdout(out_file):
+            if script == "run_vtr_flow.py":
+                out = run_vtr_flow(job.run_command(), find_vtr_file("run_vtr_flow.py"))
+            else:
+                out = subprocess.call(
+                    [find_vtr_file(script)] + job.run_command(),
+                    cwd=find_vtr_root(),
+                    stdout=out_file,
+                )
 
-        with open(vtr_flow_out, "r") as out_file:
-            for line in out_file.readlines():
-                print(line, end="")
+    with open(vtr_flow_out, "r") as out_file:
+        for line in out_file.readlines():
+            print(line, end="")
+
+    #report flow failure to queue
     if out:
         queue.put(1)
     else:
         queue.put(0)
-
-
-def print_log(log_file, indent="    "):
-    # Save position
-    curr_pos = log_file.tell()
-
-    log_file.seek(0)  # Rewind to start
-
-    # Print log
-    for line in log_file:
-        line = line.rstrip()
-        print(indent + line)
-    print("")
-
-    # Return to original position
-    log_file.seek(curr_pos)
 
 
 if __name__ == "__main__":
