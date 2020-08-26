@@ -11,8 +11,8 @@ import subprocess
 import distutils.spawn as distutils_spawn
 import argparse
 import csv
-from prettytable import PrettyTable
 from collections import OrderedDict
+from prettytable import PrettyTable
 import vtr.error
 from vtr.error import VtrError, CommandError
 
@@ -220,6 +220,7 @@ def check_cmd(command):
     return Path(command).exists()
 
 def pretty_print_table(file,border = False):
+    """ Convert file to a pretty, easily read table """
     table = PrettyTable()
     table.border = border
     reader = None
@@ -535,7 +536,10 @@ def get_next_run_dir(base_dir):
     """
     return str(PurePath(base_dir) / run_dir_name(get_next_run_number(base_dir)))
 
-def find_task_dir(args, config):
+def find_task_dir(config):
+    """
+    find the task directory
+    """
     task_dir = None
     #Task dir is just above the config directory
     task_dir = Path(config.config_dir).parent
