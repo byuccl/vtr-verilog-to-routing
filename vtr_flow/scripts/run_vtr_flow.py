@@ -368,14 +368,6 @@ def vtr_command_argparser(prog=None):
 
     return parser
 
-
-def main():
-    """
-        Main function to call vtr_command_main to run VTR
-    """
-    return vtr_command_main(sys.argv[1:], prog=sys.argv[0])
-
-
 def vtr_command_main(arg_list, prog=None):
     """
         Running VTR with the specified arguemnts.
@@ -646,5 +638,4 @@ def except_vtr_error(error, expect_fail, verbose):
 
 
 if __name__ == "__main__":
-    retval = main()
-    sys.exit(retval)
+    sys.exit(vtr_command_main(sys.argv[1:], prog=sys.argv[0]))

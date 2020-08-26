@@ -269,7 +269,7 @@ def run_tasks(
 
     run_dirs = {}
     for config in configs:
-        task_dir = find_task_dir(args, config)
+        task_dir = find_task_dir(config)
         task_run_dir = get_next_run_dir(task_dir)
         run_dirs[config.task_name] = task_run_dir
 
@@ -287,16 +287,16 @@ def run_tasks(
         if args.parse:
             print("\nParsing test results...")
             print("scripts/parse_vtr_task.py -l {}".format(args.list_file[0]))
-            parse_tasks(args, configs, jobs)
+            parse_tasks(configs, jobs)
 
         if args.create_golden:
-            create_golden_results_for_tasks(args, configs)
+            create_golden_results_for_tasks(configs)
 
         if args.check_golden:
-            num_failed += check_golden_results_for_tasks(args, configs)
+            num_failed += check_golden_results_for_tasks(configs)
 
         if args.calc_geomean:
-            summarize_qor(args, configs)
+            summarize_qor(configs)
             calc_geomean(args, configs)
     elif args.system == "scripts":
         for directory in run_dirs:

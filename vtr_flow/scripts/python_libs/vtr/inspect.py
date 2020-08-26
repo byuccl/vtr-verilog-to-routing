@@ -204,7 +204,10 @@ class RangeAbsPassRequirement(PassRequirement):
         return self._abs_threshold
 
     def check_passed(self, golden_value, check_value, check_string="golden value"):
-        """ Check if parsed value is within acceptable range, absolute value or equal to golden value """
+        """
+        Check if parsed value is within acceptable range,
+        absolute value or equal to golden value
+        """
 
         # Check for nulls
         if golden_value is None or check_value is None:

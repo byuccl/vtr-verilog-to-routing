@@ -170,7 +170,7 @@ def vtr_command_main(arg_list, prog=None):
             num_qor_failures = parse_single_test(collect_task_list(reg_test))
         elif args.check_golden:
             num_qor_failures = 0
-            parse_single_test(collect_task_list(arreg_testgs), check=True)
+            parse_single_test(collect_task_list(reg_test), check=True)
         elif args.create_golden:
             # Create golden results
             num_qor_failures = 0
@@ -187,7 +187,7 @@ def vtr_command_main(arg_list, prog=None):
             print("    Verilog-to-Routing Regression Testing")
             print("=============================================")
 
-            
+
             if reg_test.startswith("odin"):
                 num_func_failures += run_odin_test(args, reg_test)
 
