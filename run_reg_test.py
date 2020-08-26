@@ -161,97 +161,100 @@ def vtr_command_main(arg_list, prog=None):
     # Load the arguments
     args = vtr_command_argparser(prog).parse_args(arg_list)
 
-    num_func_failures = 0
-    num_qor_failures = 0
+    total_num_func_failures = 0
+    total_num_qor_failures = 0
+    for reg_test in args.reg_test:
+        num_func_failures = 0
+        num_qor_failures = 0
+        if args.parse:
+            num_qor_failures = parse_single_test(collect_task_list(reg_test))
+        elif args.check_golden:
+            num_qor_failures = 0
+            parse_single_test(collect_task_list(arreg_testgs), check=True)
+        elif args.create_golden:
+            # Create golden results
+            num_qor_failures = 0
+            parse_single_test(collect_task_list(reg_test), create=True)
+        elif args.calc_geomean:
+            # Calculate geo mean values
+            num_qor_failures = 0
+            parse_single_test(collect_task_list(reg_test), calculate=True)
+        elif args.display_qor:
+            num_qor_failures = display_qor(reg_test)
+        else:
+            # Run any ODIN tests
+            print("=============================================")
+            print("    Verilog-to-Routing Regression Testing")
+            print("=============================================")
 
-    if args.parse:
-        num_qor_failures = parse_single_test(collect_task_list(args))
-    elif args.check_golden:
-        num_qor_failures = 0
-        parse_single_test(collect_task_list(args), check=True)
-    elif args.create_golden:
-        # Create golden results
-        num_qor_failures = 0
-        parse_single_test(collect_task_list(args), create=True)
-    elif args.calc_geomean:
-        # Calculate geo mean values
-        num_qor_failures = 0
-        parse_single_test(collect_task_list(args), calculate=True)
-    elif args.display_qor:
-        num_qor_failures = display_qor(args)
-    else:
-        # Run any ODIN tests
-        print("=============================================")
-        print("    Verilog-to-Routing Regression Testing")
-        print("=============================================")
-
-        for reg_test in args.reg_test:
+            
             if reg_test.startswith("odin"):
                 num_func_failures += run_odin_test(args, reg_test)
 
-        # Collect the task lists
-        vtr_task_list_files = collect_task_list(args)
+            # Collect the task lists
+            vtr_task_list_files = collect_task_list(reg_test)
 
-        # Run the actual tasks, recording functionality failures
-        if len(vtr_task_list_files) > 0:
-            num_func_failures += run_tasks(args, vtr_task_list_files)
+            # Run the actual tasks, recording functionality failures
+            if len(vtr_task_list_files) > 0:
+                num_func_failures += run_tasks(args, vtr_task_list_files)
 
-        # Check against golden results
-        if not args.skip_qor and len(vtr_task_list_files) > 0:
-            num_qor_failures += parse_single_test(
-                vtr_task_list_files, check=True, calculate=True
-            )
-            print(
-                "\nTest '{}' had {} qor test failures".format(
-                    args.reg_test, num_qor_failures
+            # Check against golden results
+            if not args.skip_qor and len(vtr_task_list_files) > 0:
+                num_qor_failures += parse_single_test(
+                    vtr_task_list_files, check=True, calculate=True
                 )
-            )
-        print("\nTest '{}' had {} run failures\n".format(args.reg_test, num_func_failures))
+                print(
+                    "\nTest '{}' had {} qor test failures".format(
+                        reg_test, num_qor_failures
+                    )
+                )
+            print("\nTest '{}' had {} run failures\n".format(reg_test, num_func_failures))
+            total_num_func_failures += num_func_failures
+            total_num_qor_failures += num_qor_failures
     # Final summary
-    if num_func_failures == 0 and (num_qor_failures == 0 or args.skip_qor):
+    if total_num_func_failures == 0 and (total_num_qor_failures == 0 or args.skip_qor):
         print("All tests passed")
-    elif num_func_failures != 0 or num_qor_failures != 0:
-        print("Error: {} tests failed".format(num_func_failures + num_qor_failures))
+    elif total_num_func_failures != 0 or total_num_qor_failures != 0:
+        print("Error: {} tests failed".format(total_num_func_failures + total_num_qor_failures))
 
-    sys.exit(num_func_failures + num_qor_failures)
+    sys.exit(total_num_func_failures + total_num_qor_failures)
 
 
-def display_qor(args):
+def display_qor(reg_test):
     """ Display the qor tests script files to be run outside of this script """
-    for test in args.reg_test:
-        test_dir = Path(find_vtr_root()) / "vtr_flow/tasks/regression_tests" / test
-        if not (test_dir / "qor_geomean.txt").is_file():
-            print("QoR results do not exist ({}/qor_geomean.txt)".format(str(test_dir)))
-            return 1
-        print("=" * 121)
-        print("\t" * 6, end="")
-        print("{} QoR Results".format(test))
-        print("=" * 121)
-        with (test_dir / "qor_geomean.txt").open("r") as results:
-            data = OrderedDict()
-            data["revision"] = [8, "", "{}"]
-            data["date"] = [7, "", "{}"]
-            data["total_runtime"] = [3, " s", "%.3f"]
-            data["total_wirelength"] = [2, " units", "%.0f"]
-            data["num_clb"] = [4, " blocks", "%.2f"]
-            data["min_chan_width"] = [5, " tracks", "%.3f"]
-            data["crit_path_delay"] = [6, " ns", "%.3f"]
-            table = PrettyTable()
-            table.field_names = list(data.keys())
-            results.readline()
-            for line in results.readlines():
-                info = line.split()
-                row = []
-                for _, values in data.items():
-                    if len(info) - 1 < values[0]:
-                        row += [""]
+    test_dir = Path(find_vtr_root()) / "vtr_flow/tasks/regression_tests" / reg_test
+    if not (test_dir / "qor_geomean.txt").is_file():
+        print("QoR results do not exist ({}/qor_geomean.txt)".format(str(test_dir)))
+        return 1
+    print("=" * 121)
+    print("\t" * 6, end="")
+    print("{} QoR Results".format(reg_test))
+    print("=" * 121)
+    with (test_dir / "qor_geomean.txt").open("r") as results:
+        data = OrderedDict()
+        data["revision"] = [8, "", "{}"]
+        data["date"] = [7, "", "{}"]
+        data["total_runtime"] = [3, " s", "%.3f"]
+        data["total_wirelength"] = [2, " units", "%.0f"]
+        data["num_clb"] = [4, " blocks", "%.2f"]
+        data["min_chan_width"] = [5, " tracks", "%.3f"]
+        data["crit_path_delay"] = [6, " ns", "%.3f"]
+        table = PrettyTable()
+        table.field_names = list(data.keys())
+        results.readline()
+        for line in results.readlines():
+            info = line.split()
+            row = []
+            for _, values in data.items():
+                if len(info) - 1 < values[0]:
+                    row += [""]
+                else:
+                    if values[2] == "{}" or not info[values[0]].isnumeric():
+                        row += [("{}".format(info[values[0]])) + values[1]]
                     else:
-                        if values[2] == "{}" or not info[values[0]].isnumeric():
-                            row += [("{}".format(info[values[0]])) + values[1]]
-                        else:
-                            row += [(values[2] % float(info[values[0]])) + values[1]]
-                table.add_row(row)
-            print(table)
+                        row += [(values[2] % float(info[values[0]])) + values[1]]
+            table.add_row(row)
+        print(table)
     return 0
 
 
@@ -297,20 +300,19 @@ def run_odin_test(args, test_name):
     return 0
 
 
-def collect_task_list(args):
+def collect_task_list(reg_test):
     """ create a list of task files """
     vtr_task_list_files = []
-    for reg_test in args.reg_test:
-        if reg_test.startswith("vtr"):
-            task_list_filepath = str(
-                Path(find_vtr_root())
-                / "vtr_flow"
-                / "tasks"
-                / "regression_tests"
-                / reg_test
-                / "task_list.txt"
-            )
-            vtr_task_list_files.append(task_list_filepath)
+    if reg_test.startswith("vtr"):
+        task_list_filepath = str(
+            Path(find_vtr_root())
+            / "vtr_flow"
+            / "tasks"
+            / "regression_tests"
+            / reg_test
+            / "task_list.txt"
+        )
+        vtr_task_list_files.append(task_list_filepath)
     return vtr_task_list_files
 
 
