@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
+"""
+    Module for running regression tests
+"""
 from pathlib import Path
 import sys
 import argparse
 import textwrap
 import subprocess
 from collections import OrderedDict
-from datetime import datetime
 from prettytable import PrettyTable
 
 
@@ -18,7 +20,6 @@ from run_vtr_task import vtr_command_main as run_vtr_task
 from vtr import (
     find_vtr_file,
     find_vtr_root,
-    format_elapsed_time,
     RawDefaultHelpFormatter,
 )
 
@@ -27,6 +28,8 @@ BASIC_VERBOSITY = 1
 
 
 def vtr_command_argparser(prog=None):
+    """ Parses the arguments of run_reg_test """
+
     description = textwrap.dedent(
         """
                     Runs one or more VTR regression tests.
@@ -151,12 +154,10 @@ def vtr_command_argparser(prog=None):
 
     return parser
 
-
-def main():
-    vtr_command_main(sys.argv[1:])
-
-
 def vtr_command_main(arg_list, prog=None):
+    """
+    Run the given regression tests
+    """
     # Load the arguments
     args = vtr_command_argparser(prog).parse_args(arg_list)
 
@@ -202,10 +203,10 @@ def vtr_command_main(arg_list, prog=None):
             )
             print(
                 "\nTest '{}' had {} qor test failures".format(
-                    reg_test, num_qor_failures
+                    args.reg_test, num_qor_failures
                 )
             )
-        print("\nTest '{}' had {} run failures\n".format(reg_test, num_func_failures))
+        print("\nTest '{}' had {} run failures\n".format(args.reg_test, num_func_failures))
     # Final summary
     if num_func_failures == 0 and (num_qor_failures == 0 or args.skip_qor):
         print("All tests passed")
@@ -216,6 +217,7 @@ def vtr_command_main(arg_list, prog=None):
 
 
 def display_qor(args):
+    """ Display the qor tests script files to be run outside of this script """
     for test in args.reg_test:
         test_dir = Path(find_vtr_root()) / "vtr_flow/tasks/regression_tests" / test
         if not (test_dir / "qor_geomean.txt").is_file():
@@ -254,6 +256,7 @@ def display_qor(args):
 
 
 def run_odin_test(args, test_name):
+    """ Run ODIN II test with given test name """
     odin_reg_script = [
         find_vtr_file("verify_odin.sh"),
         "--clean",
@@ -295,6 +298,7 @@ def run_odin_test(args, test_name):
 
 
 def collect_task_list(args):
+    """ create a list of task files """
     vtr_task_list_files = []
     for reg_test in args.reg_test:
         if reg_test.startswith("vtr"):
@@ -311,7 +315,7 @@ def collect_task_list(args):
 
 
 def run_tasks(args, task_lists):
-    # Call 'vtr task'
+    """Call 'run_vtr_task' with all the required arguments in the command"""
     print("Running {}".format(args.reg_test[0]))
     print(
         "-------------------------------------------------------------------------------"
@@ -328,6 +332,7 @@ def run_tasks(args, task_lists):
 
 
 def parse_single_test(task_lists, check=True, calculate=True, create=False):
+    """ parse the test results """
     vtr_task_cmd = ["-l"] + task_lists
     if check:
         vtr_task_cmd += ["-check_golden"]
@@ -341,4 +346,4 @@ def parse_single_test(task_lists, check=True, calculate=True, create=False):
 
 
 if __name__ == "__main__":
-    main()
+    vtr_command_main(sys.argv[1:])
