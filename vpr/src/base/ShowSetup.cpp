@@ -155,6 +155,9 @@ static void ShowAnnealSched(const t_annealing_sched& AnnealSched) {
         case USER_SCHED:
             VTR_LOG("USER_SCHED\n");
             break;
+        case DUSTY_SCHED:
+            VTR_LOG("DUSTY_SCHED\n");
+            break;
         default:
             VTR_LOG_ERROR("Unknown annealing schedule\n");
     }
@@ -165,6 +168,12 @@ static void ShowAnnealSched(const t_annealing_sched& AnnealSched) {
         VTR_LOG("AnnealSched.init_t: %f\n", AnnealSched.init_t);
         VTR_LOG("AnnealSched.alpha_t: %f\n", AnnealSched.alpha_t);
         VTR_LOG("AnnealSched.exit_t: %f\n", AnnealSched.exit_t);
+    } else if (DUSTY_SCHED == AnnealSched.type) {
+        VTR_LOG("AnnealSched.alpha_min: %f\n", AnnealSched.alpha_min);
+        VTR_LOG("AnnealSched.alpha_max: %f\n", AnnealSched.alpha_max);
+        VTR_LOG("AnnealSched.alpha_decay: %f\n", AnnealSched.alpha_decay);
+        VTR_LOG("AnnealSched.success_min: %f\n", AnnealSched.success_min);
+        VTR_LOG("AnnealSched.success_target: %f\n", AnnealSched.success_target);
     }
 }
 
@@ -509,11 +518,15 @@ static void ShowPlacerOpts(const t_placer_opts& PlacerOpts,
             case RANDOM:
                 VTR_LOG("RANDOM\n");
                 break;
-            case USER:
-                VTR_LOG("USER '%s'\n", PlacerOpts.pad_loc_file.c_str());
-                break;
             default:
                 VPR_FATAL_ERROR(VPR_ERROR_UNKNOWN, "Unknown I/O pad location type\n");
+        }
+
+        VTR_LOG("PlacerOpts.constraints_file: ");
+        if (PlacerOpts.constraints_file == "") {
+            VTR_LOG("No constraints file given\n");
+        } else {
+            VTR_LOG("Using constraints file '%s'\n", PlacerOpts.constraints_file.c_str());
         }
 
         VTR_LOG("PlacerOpts.place_cost_exp: %f\n", PlacerOpts.place_cost_exp);
@@ -664,5 +677,6 @@ static void ShowPackerOpts(const t_packer_opts& PackerOpts) {
     VTR_LOG("PackerOpts.inter_cluster_net_delay: %f\n", PackerOpts.inter_cluster_net_delay);
     VTR_LOG("PackerOpts.timing_driven: %s", (PackerOpts.timing_driven ? "true\n" : "false\n"));
     VTR_LOG("PackerOpts.target_external_pin_util: %s", vtr::join(PackerOpts.target_external_pin_util, " ").c_str());
+    VTR_LOG("\n");
     VTR_LOG("\n");
 }
