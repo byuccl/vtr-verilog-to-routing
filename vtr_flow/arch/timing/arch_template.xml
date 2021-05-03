@@ -20,8 +20,24 @@
   </models>
 
   <tiles>
-   <!-- Content inside this tag contains a group of <pb_type> tags that specify the 
-        types of functional blocks and their properties. -->
+   <!-- The content within the <tiles> describes the physical tiles available in the FPGA. Each tile type 
+        is specified with the <tile> tag withing the <tiles> tag. -->
+   <!-- Main Tags:  
+          <tile name="string" capacity="int" width="int" height="int" area="float"/> 
+            Required Attributes:
+              name – The name of this tile. The name must be unique with respect to any other sibling <tile> tag.
+            Optional Attributes:
+              width – The width of the block type in grid tiles.
+              height – The height of the block type in grid tiles.
+              area – The logic area (in MWTA) of the block type.
+        Sub Tags:
+          <sub_tile name="string" capacity="{int}">
+            Required Attributes:
+              name – The name of this tile. The name must be unique with respect to any other sibling <tile> tag.
+            Optional Attributes:
+              capacity – The number of instances of this block type at each grid location.
+   
+   -->
   </tiles>
 
   <layout>
@@ -33,8 +49,8 @@
           <fixed_layout name="string" width="int" height="int">
             Required Attributes:
               name – The unique name identifying this device grid layout.
-              width – The device grid width
-              height – The device grid height
+              width – The device grid width.
+              height – The device grid height.
         Sub Tags (Placed within a layout main tag):
           <fill type="string" priority="int"/>
             Required Attributes:
@@ -85,7 +101,7 @@
               endy – An expression specifying the vertical ending position of the region (inclusive).
               repeaty – An expression specifying the vertical repeat factor of the column.
               incry – An expression specifying the horizontal increment between block instantiations within the region. -->
-  <!-- LAYOUT TEMPLATE
+   <!-- LAYOUT TEMPLATE
     //Specifies an auto-scaling square FPGA floorplan
     <auto_layout aspect_ratio="1.0">
         // Create I/Os around the device perimeter
@@ -109,9 +125,35 @@
 
   <device>
    <!-- Content inside this tag specifies device information. -->
+   <!-- Main tags:
+          <sizing R_minW_nmos="float" R_minW_pmos="float"/>
+            Required Attributes:
+              R_minW_nmos – The resistance of minimum-width nmos transistor. This data is used only by the area model built into VPR.
+              R_minW_pmos – The resistance of minimum-width pmos transistor. This data is used only by the area model built into VPR. 
+          <connection_block input_switch_name="string"/>
+            Required Attributes:
+              switch_name – Specifies the name of the <switch> in the <switchlist> used to connect routing tracks to block input pins (i.e. the input connection block switch).
+          <area grid_logic_tile_area="floatingPointNum"/>
+          <switch_block type="{wilton | subset | universal | custom}" fs="int"/>
+            Required Attributes:
+              type – The type of switch block to use.
+              fs – The value of fs
+          <chan_width_distr>content</chan_width_distr>
+          <default_fc in_type="{frac|abs}" in_val="{int|float}" out_type="{frac|abs}" out_val="{int|float}"/> -->
+   <!-- DEVICE TEMPLATE
+    <sizing R_minW_nmos="8926" R_minW_pmos="16067"/>
+    <area grid_logic_tile_area="0"/>
+    <chan_width_distr>
+      <x distr="uniform" peak="1.000000"/>
+      <y distr="uniform" peak="1.000000"/>
+    </chan_width_distr>
+    <switch_block type="wilton" fs="3"/>
+    <connection_block input_switch_name="ipin_cblock"/> -->
   </device>
 
   <switchlist>
+    <!-- The tags within the <switchlist> tag specifies the switches used to connect wires and pins together. -->
+
   </switchlist>
 
   <segmentlist>
