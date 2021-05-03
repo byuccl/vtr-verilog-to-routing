@@ -36,8 +36,71 @@
               name – The name of this tile. The name must be unique with respect to any other sibling <tile> tag.
             Optional Attributes:
               capacity – The number of instances of this block type at each grid location.
-   
-   -->
+          <input name="string" num_pins="int" equivalent="{none|full}" is_non_clock_global="{true|false}"/>
+            Required Attributes:
+              name – Name of the input port.
+              num_pins – Number of pins the input port has.
+          <output name="string" num_pins="int" equivalent="{none|full|instance}"/>
+            Required Attributes:
+              name – Name of the output port.
+              num_pins – Number of pins the output port has.
+          <clock name="string" num_pins="int" equivalent="{none|full}"/>
+          <equivalent_sites>
+            Wrap Around the Following:
+              <site pb_type="string" pin_mapping="string"/>
+                Required Attributes:
+                pb_type – Name of the corresponding pb_type.
+          <fc in_type="{frac|abs}" in_val="{int|float}" out_type="{frac|abs}" out_val="{int|float}">
+            Required Attributes:
+              in_type – Indicates how the F_c values for input pins should be interpreted.
+                frac: The fraction of tracks of each wire/segment type.
+                abs: The absolute number of tracks of each wire/segment type.
+              in_val – Fraction or absolute number of tracks to which each input pin is connected.
+              out_type – Indicates how the F_c values for output pins should be interpreted.
+                frac: The fraction of tracks of each wire/segment type.
+                abs: The absolute number of tracks of each wire/segment type.
+              out_val – Fraction or absolute number of wires/segments to which each output pin connects.
+          <pinlocations pattern="{spread|perimeter|custom}">
+            Required Attributes:
+              pattern – 
+                spread: denotes that the pins are to be spread evenly on all sides of the complex block.
+                perimeter: denotes that the pins are to be spread evenly on perimeter sides of the complex block.
+                spread_inputs_perimeter_outputs: denotes that inputs pins are to be spread on all sides of the complex block, 
+                                                 but output pins are to be spread only on perimeter sides of the block.
+                custom: allows the architect to specify specifically where the pins are to be placed using <loc> tags.
+          <loc side="{left|right|bottom|top}" xoffset="int" yoffset="int">name_of_complex_logic_block.port_name[int:int] ... </loc>
+            Required Attributes:
+              side – Specifies which of the four sides of a grid location the pins in the contents are located. -->
+   <!-- TILES TEMPLATE
+    <tile name="io" area="0">
+      <sub_tile name="io" capacity="8">
+        <equivalent_sites>
+          <site pb_type="io" pin_mapping="direct"/>
+        </equivalent_sites>
+        <input name="outpad" num_pins="1"/>
+        <output name="inpad" num_pins="1"/>
+        <clock name="clock" num_pins="1"/>
+        <fc in_type="frac" in_val="0.15" out_type="frac" out_val="0.10"/>
+        <pinlocations pattern="custom">
+          <loc side="left">io.outpad io.inpad io.clock</loc>
+          <loc side="top">io.outpad io.inpad io.clock</loc>
+          <loc side="right">io.outpad io.inpad io.clock</loc>
+          <loc side="bottom">io.outpad io.inpad io.clock</loc>
+        </pinlocations>
+      </sub_tile>
+    </tile>
+    <tile name="clb" area="53894">
+      <sub_tile name="clb">
+        <equivalent_sites>
+          <site pb_type="clb" pin_mapping="direct"/>
+        </equivalent_sites>
+        <input name="I" num_pins="40" equivalent="full"/>
+        <output name="O" num_pins="10" equivalent="instance"/>
+        <clock name="clk" num_pins="1"/>
+        <fc in_type="frac" in_val="0.15" out_type="frac" out_val="0.10"/>
+        <pinlocations pattern="spread"/>
+      </sub_tile>
+    </tile> -->
   </tiles>
 
   <layout>
@@ -153,16 +216,244 @@
 
   <switchlist>
     <!-- The tags within the <switchlist> tag specifies the switches used to connect wires and pins together. -->
-
+    <!-- Main Tags:
+          <switch type="{mux|tristate|pass_gate|short|buffer}" name="string" R="float" Cin="float" Cout="float" Cinternal="float" Tdel="float" buf_size="{auto|float}" mux_trans_size="float", power_buf_size="int"/>
+            Required Attributes:
+              type – The type of switch:
+                mux: An isolating, configurable multiplexer
+                tristate: An isolating, configurable tristate-able buffer
+                pass_gate: A non-isolating, configurable pass gate
+                short: A non-isolating, non-configurable electrical short (e.g. between two segments).
+                buffer: An isolating, non-configurable non-tristate-able buffer (e.g. in-line along a segment).
+          <Tdel num_inputs="int" delay="float"/>
+            Required Attributes:
+              num_inputs – The number of switch inputs (fan-in)
+              delay – The intrinsic switch delay when the switch topology has the specified number of switch input. -->
+    <!-- SWITCHLIST TEMPLATE 
+     <switch type="mux" name="0" R="551" Cin=".77e-15" Cout="4e-15" Tdel="58e-12" mux_trans_size="2.630740" buf_size="27.645901"/>
+     <switch type="mux" name="ipin_cblock" R="2231.5" Cout="0." Cin="1.47e-15" Tdel="7.247000e-11" mux_trans_size="1.222260" buf_size="auto"/>
+     <switch type="mux" name="my_mux" R="522" Cin="3.1e-15" Cout="3e-15" Cinternal="5e-15" mux_trans_size="1.7" buf_size="23">
+      <Tdel num_inputs="12" delay="8.00e-11"/>
+      <Tdel num_inputs="15" delay="8.4e-11"/>
+      <Tdel num_inputs="20" delay="9.4e-11"/>
+     </switch> -->
   </switchlist>
 
   <segmentlist>
+    <!-- The content within the <segmentlist> tag consists of a group of <segment> tags. -->
+    <!-- Main Tags:
+        <segment name="unique_name" length="int" type="{bidir|unidir}" freq="float" Rmetal="float" Cmetal="float">content</segment> 
+          Required Attributes:
+            name – A unique alphanumeric name to identify this segment type.
+            length – Either the number of logic blocks spanned by each segment, or the keyword longline. 
+                     Longline means segments of this type span the entire FPGA array.
+            freq – The supply of routing tracks composed of this type of segment. VPR automatically determines the percentage 
+                   of tracks for each segment type by taking the frequency for the type specified and dividing with the 
+                   sum of all frequencies. It is recommended that the sum of all segment frequencies be in the range 1 to 100.
+            Rmetal – Resistance per unit length (in terms of logic blocks) of this wiring track, in Ohms. For example, a 
+                     segment of length 5 with Rmetal = 10 Ohms / logic block would have an end-to-end resistance of 50 Ohms.
+            Cmetal – Capacitance per unit length (in terms of logic blocks) of this wiring track, in Farads. For example, a 
+                     segment of length 5 with Cmetal = 2e-14 F / logic block would have a total metal capacitance of 10e-13F.
+            directionality – This is either unidirectional or bidirectional and indicates whether a segment has multiple drive 
+                             points (bidirectional), or a single driver at one end of the wire segment (unidirectional). 
+                             All segments must have the same directionality value. See [LLTY04] for a description of 
+                             unidirectional single-driver wire segments.
+            content – The switch names and the depopulation pattern.
+       Sub Tags:
+        <sb type="pattern">int list</sb>
+        <cb type="pattern">int list</cb>
+        <mux name="string"/>
+          Required Attributes:
+            name – Name of the mux switch type used to drive this type of segment.
+        <wire_switch name="string"/>
+          Required Attributes:
+            name – Name of the switch type used by other wires to drive this type of segment.
+        <opin_switch name="string"/>
+          Required Attributes:
+            name – Name of the switch type used by block pins to drive this type of segment. -->
+    <!-- SEGMENTLIST TEMPLATE
+    <segment freq="1.000000" length="4" type="unidir" Rmetal="101" Cmetal="22.5e-15">
+      <mux name="0"/>
+      <sb type="pattern">1 1 1 1 1</sb>
+      <cb type="pattern">1 1 1 1</cb> -->
   </segmentlist>
 
   <directlist>
+    <!-- The content within the <directlist> tag consists of a group of <direct> tags. -->
+    <!-- Main Tags:
+          <direct name="string" from_pin="string" to_pin="string" x_offset="int" y_offset="int" z_offset="int" switch_name="string"/>
+            Required Attributes:
+              name – is a unique alphanumeric string to name the connection.
+              from_pin – pin of complex block that drives the connection.
+              to_pin – pin of complex block that receives the connection.
+              x_offset – The x location of the receiving CLB relative to the driving CLB.
+              y_offset – The y location of the receiving CLB relative to the driving CLB.
+              z_offset – The z location of the receiving CLB relative to the driving CLB. -->
+    <!-- DIRECTLIST TEMPLATE
+    <direct name="adder_carry" from_pin="clb.cout" to_pin="clb.cin" x_offset="0" y_offset="-1" z_offset="0"/> -->
   </directlist>
 
   <complexblocklist>
+    <!-- The content within the <complexblocklist> describes the complex blocks found within the FPGA. Each type of complex 
+        block is specified with a top-level <pb_type> tag within the <complexblocklist> tag. -->
+    <!-- Main Tags:
+          <pb_type name="string" num_pb="int" blif_model="string"/>
+            Required Attributes:
+              name – The name of this pb_type. The name must be unique with respect to any parent, sibling, or child <pb_type>.
+              blif_model – Specifies the netlist primitive which can be implemented by this pb_type.
+          <interconnect>
+         SUB TAGS:
+          <input name="string" num_pins="int" equivalent="{none|full}" is_non_clock_global="{true|false}"/>
+            Required Attributes:
+              name – Name of the input port.
+              num_pins – Number of pins the input port has.
+          <output name="string" num_pins="int" equivalent="{none|full|instance}"/>
+            Required Attributes:
+              name – Name of the output port.
+              num_pins – Number of pins the output port has.
+          <clock name="string" num_pins="int" equivalent="{none|full}"/>
+          <mode name="string" disable_packing="bool">
+            Required Attributes:
+              name – Name for this mode. Must be unique compared to other modes.
+              Wrap around other pb_types. 
+          <complete name="string" input="string" output="string"/>
+            Required Attributes:
+              name – Identifier for the interconnect.
+              input – Pins that are inputs to this interconnect.
+              output – Pins that are outputs of this interconnect.
+          <direct name="string" input="string" output="string"/>
+            Required Attributes:
+              name – Identifier for the interconnect.
+              input – Pins that are inputs to this interconnect.
+              output – Pins that are outputs of this interconnect.
+          <mux name="string" input="string" output="string"/>
+            Required Attributes:
+              name – Identifier for the interconnect.
+              input – Pins that are inputs to this interconnect. Different data lines are separated by a space.
+              output – Pins that are outputs of this interconnect.
+          <pack_pattern name="string" in_port="string" out_port="string"/>
+            Required Attributes:
+              name – The name of the pattern.
+              in_port – The input pins of the edges for this pattern.
+              out_port – Which output pins of the edges for this pattern. -->
+   <!-- COMPLEXBLOCKLIST TEMPLATE
+    <pb_type name="io">
+      <input name="outpad" num_pins="1"/>
+      <output name="inpad" num_pins="1"/>
+      <clock name="clock" num_pins="1"/>
+      <mode name="inpad">
+        <pb_type name="inpad" blif_model=".input" num_pb="1">
+          <output name="inpad" num_pins="1"/>
+        </pb_type>
+        <interconnect>
+          <direct name="inpad" input="inpad.inpad" output="io.inpad">
+            <delay_constant max="4.243e-11" in_port="inpad.inpad" out_port="io.inpad"/>
+          </direct>
+        </interconnect>
+      </mode>
+      <mode name="outpad">
+        <pb_type name="outpad" blif_model=".output" num_pb="1">
+          <input name="outpad" num_pins="1"/>
+        </pb_type>
+        <interconnect>
+          <direct name="outpad" input="io.outpad" output="outpad.outpad">
+            <delay_constant max="1.394e-11" in_port="io.outpad" out_port="outpad.outpad"/>
+          </direct>
+        </interconnect>
+      </mode>
+      <power method="ignore"/>
+    </pb_type>
+    <pb_type name="clb">
+      <input name="I" num_pins="40" equivalent="full"/>
+      <output name="O" num_pins="10" equivalent="instance"/>
+      <clock name="clk" num_pins="1"/>
+      <pb_type name="fle" num_pb="10">
+        <input name="in" num_pins="6"/>
+        <output name="out" num_pins="1"/>
+        <clock name="clk" num_pins="1"/>
+        <mode name="n1_lut6">
+          <pb_type name="ble6" num_pb="1">
+            <input name="in" num_pins="6"/>
+            <output name="out" num_pins="1"/>
+            <clock name="clk" num_pins="1"/>
+            <pb_type name="lut6" blif_model=".names" num_pb="1" class="lut">
+              <input name="in" num_pins="6" port_class="lut_in"/>
+              <output name="out" num_pins="1" port_class="lut_out"/>
+              <delay_matrix type="max" in_port="lut6.in" out_port="lut6.out">
+                261e-12
+                261e-12
+                261e-12
+                261e-12
+                261e-12
+                261e-12
+              </delay_matrix>
+            </pb_type>
+            <pb_type name="ff" blif_model=".latch" num_pb="1" class="flipflop">
+              <input name="D" num_pins="1" port_class="D"/>
+              <output name="Q" num_pins="1" port_class="Q"/>
+              <clock name="clk" num_pins="1" port_class="clock"/>
+              <T_setup value="66e-12" port="ff.D" clock="clk"/>
+              <T_clock_to_Q max="124e-12" port="ff.Q" clock="clk"/>
+            </pb_type>
+            <interconnect>
+              <direct name="direct1" input="ble6.in" output="lut6[0:0].in"/>
+              <direct name="direct2" input="lut6.out" output="ff.D">
+                <pack_pattern name="ble6" in_port="lut6.out" out_port="ff.D"/>
+              </direct>
+              <direct name="direct3" input="ble6.clk" output="ff.clk"/>
+              <mux name="mux1" input="ff.Q lut6.out" output="ble6.out">
+                <delay_constant max="25e-12" in_port="lut6.out" out_port="ble6.out"/>
+                <delay_constant max="45e-12" in_port="ff.Q" out_port="ble6.out"/>
+              </mux>
+            </interconnect>
+          </pb_type>
+          <interconnect>
+            <direct name="direct1" input="fle.in" output="ble6.in"/>
+            <direct name="direct2" input="ble6.out" output="fle.out[0:0]"/>
+            <direct name="direct3" input="fle.clk" output="ble6.clk"/>
+          </interconnect>
+        </mode>
+      </pb_type>
+      <interconnect>
+        <complete name="crossbar" input="clb.I fle[9:0].out" output="fle[9:0].in">
+          <delay_constant max="95e-12" in_port="clb.I" out_port="fle[9:0].in"/>
+          <delay_constant max="75e-12" in_port="fle[9:0].out" out_port="fle[9:0].in"/>
+        </complete>
+        <complete name="clks" input="clb.clk" output="fle[9:0].clk">
+        </complete>
+        <direct name="clbouts1" input="fle[9:0].out" output="clb.O"/>
+      </interconnect>
+    </pb_type> -->
   </complexblocklist>
+
+  <power>
+    <!-- Additional power options -->
+    <!-- Main Tags:
+          <local_interconnect C_wire="float" factor="float"/>
+            Required Attributes:
+              C_wire – The local interconnect capacitance in Farads/Meter.
+            Optional Attributes:
+              factor – The local interconnect scaling factor. Default: 0.5.   
+          <buffers logical_effort_factor="float"/>
+            Required Attributes:
+              logical_effort_factor – Default: 4. -->
+    <!-- POWER TEMPLATE
+      <local_interconnect C_wire="2.5e-10"/>
+      <mux_transistor_size mux_transistor_size="3"/>
+      <FF_size FF_size="4"/>
+      <LUT_transistor_size LUT_transistor_size="4"/> -->
+  </power>
+
+  <clocks>
+    <!-- Allows you to specify clocking purely for power estimation -->
+    <!-- Main Tags: 
+      <clock C_wire="float" C_wire_per_m="float" buffer_size={"float"|"auto"}/>
+      Optional Attributes:
+        C_wire – The absolute capacitance, in Farads, of the wire between each clock buffer.
+        C_wire_per_m – The wire capacitance, in Farads per Meter.
+        buffer_size – The size of each clock buffer. -->
+    <!-- CLOCKS TEMPLATE
+      <clock buffer_size="auto" C_wire="2.5e-10"/> -->
+  </clocks>
 
 </architecture>
