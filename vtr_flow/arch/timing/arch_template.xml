@@ -1,0 +1,126 @@
+<!-- Template for an XML architecture file. Explains what each tag is used for and provides an example of what structures
+     are contained in each tag.-->
+
+<architecture>
+
+  <models>
+   <!-- Each <model> tag describes the BLIF .subckt model names that are accepted by the FPGA architecture. 
+        The name of the model must match the corresponding name of the BLIF model. -->
+   <!-- MODEL TEMPLATE
+    <model name="name string">
+      <input_ports>
+        <port name="string" is_clock="{0 | 1} clock="string" combinational_sink_ports="string1 string2 ..."/>
+        <port name="a" combinational_sink_ports="out"/>
+        <port name="b" combinational_sink_ports="out"/>
+      </input_ports>
+      <output_ports>
+        <port name="out"/>
+      </output_ports>
+    </model> -->
+  </models>
+
+  <tiles>
+   <!-- Content inside this tag contains a group of <pb_type> tags that specify the 
+        types of functional blocks and their properties. -->
+  </tiles>
+
+  <layout>
+   <!-- Content inside this tag specifies device grid layout. -->
+   <!-- Main Tags:
+          <auto_layout aspect_ratio="floatingPointNum">
+            Optional Attributes: aspect_ratio – The device grid’s target aspect ratio (width / height) Default: 1.0
+            At most one <auto_layout> can be specified.
+          <fixed_layout name="string" width="int" height="int">
+            Required Attributes:
+              name – The unique name identifying this device grid layout.
+              width – The device grid width
+              height – The device grid height
+        Sub Tags (Placed within a layout main tag):
+          <fill type="string" priority="int"/>
+            Required Attributes:
+              type – The name of the top-level complex block type (i.e. <pb_type>) being specified.
+              priority – The priority of this layout specification. Tags with higher priority override those with lower priority.
+          <perimeter type="string" priority="int"/>
+            Required Attributes:
+              type – The name of the top-level complex block type (i.e. <pb_type>) being specified.
+              priority – The priority of this layout specification. Tags with higher priority override those with lower priority.
+          <corners type="string" priority="int"/>
+            Required Attributes:
+              type – The name of the top-level complex block type (i.e. <pb_type>) being specified.
+              priority – The priority of this layout specification. Tags with higher priority override those with lower priority.
+          <single type="string" priority="int" x="expr" y="expr"/>
+            Required Attributes:
+              type – The name of the top-level complex block type (i.e. <pb_type>) being specified.
+              priority – The priority of this layout specification. Tags with higher priority override those with lower priority.
+              x – The horizontal position of the block type instance.
+              y – The vertical position of the block type instance.
+          <col type="string" priority="int" startx="expr" repeatx="expr" starty="expr" incry="expr"/>
+            Required Attributes:
+              type – The name of the top-level complex block type (i.e. <pb_type>) being specified.
+              priority – The priority of this layout specification. Tags with higher priority override those with lower priority.
+              startx – An expression specifying the horizontal starting position of the column.
+            Optional Attributes:
+              repeatx – An expression specifying the horizontal repeat factor of the column.
+              starty – An expression specifying the vertical starting offset of the column.
+              incry – An expression specifying the vertical increment between block instantiations within the region.
+          <row type="string" priority="int" starty="expr" repeaty="expr" startx="expr"/>
+            Required Attributes:
+              type – The name of the top-level complex block type (i.e. <pb_type>) being specified.
+              priority – The priority of this layout specification. Tags with higher priority override those with lower priority.
+              starty – An expression specifying the vertical starting position of the row.
+            Optional Attributes:
+              repeaty – An expression specifying the vertical repeat factor of the row.
+              startx – An expression specifying the horizontal starting offset of the row.
+              incry – An expression specifying the horizontal increment between block instantiations within the region.
+          <region type="string" priority="int" startx="expr" endx="expr repeatx="expr" incrx="expr" starty="expr" endy="expr" repeaty="expr" incry="expr"/>
+            Required Attributes:
+              type – The name of the top-level complex block type (i.e. <pb_type>) being specified.
+              priority – The priority of this layout specification. Tags with higher priority override those with lower priority.
+            Optional Attributes:
+              startx – An expression specifying the horizontal starting position of the region (inclusive).
+              endx – An expression specifying the horizontal ending position of the region (inclusive).
+              repeatx – An expression specifying the horizontal repeat factor of the column.
+              incrx – An expression specifying the horizontal increment between block instantiations within the region.
+              starty – An expression specifying the vertical starting position of the region (inclusive).
+              endy – An expression specifying the vertical ending position of the region (inclusive).
+              repeaty – An expression specifying the vertical repeat factor of the column.
+              incry – An expression specifying the horizontal increment between block instantiations within the region. -->
+  <!-- LAYOUT TEMPLATE
+    //Specifies an auto-scaling square FPGA floorplan
+    <auto_layout aspect_ratio="1.0">
+        // Create I/Os around the device perimeter
+        <perimeter type="io" priority=10"/>
+        // Nothing in the corners
+        <corners type="EMPTY" priority="100"/>
+        // Create a column of RAMs starting at column 2, and
+           repeating every 3 columns. Note that a vertical offset (starty)
+           of 1 is needed to avoid overlapping the IOs
+        <col type="RAM" startx="2" repeatx="3" starty="1" priority="3"/>
+        // Create a single PCIE block along the bottom, overriding
+             I/O and RAM slots
+        <single type="PCIE" x="3" y="0" priority="20"/>
+        // Create an additional row of I/Os just above the PCIE,
+             which will not override RAMs
+        <row type="io" starty="5" priority="2"/>
+        // Fill remaining with CLBs
+        <fill type="CLB" priority="1"/>
+    </auto_layout> -->
+  </layout>
+
+  <device>
+   <!-- Content inside this tag specifies device information. -->
+  </device>
+
+  <switchlist>
+  </switchlist>
+
+  <segmentlist>
+  </segmentlist>
+
+  <directlist>
+  </directlist>
+
+  <complexblocklist>
+  </complexblocklist>
+
+</architecture>
