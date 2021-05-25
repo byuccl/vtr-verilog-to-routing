@@ -112,29 +112,18 @@
     </tiles>
 
     <layout>
-        <fixed_layout name="unnamed_device" width="75" height="155">
-            <perimeter type="io" priority="50"/>
-            <corners type="EMPTY" priority="99"/>
-            <fill type="clb" priority="1"/>
-            <col type="EMPTY" startx="9" starty="8" priority="15"/>
-            <col type="EMPTY" startx="14" starty="1" priority="15"/>
-            <col type="EMPTY" startx="40" starty="1" priority="15"/>
-            <col type="EMPTY" startx="53" starty="1" priority="15"/>
-            <col type="EMPTY" startx="60" starty="1" priority="15"/>     
-            <col type="EMPTY" startx="65" starty="1" priority="15"/>        
-            <row type="EMPTY" startx="1" starty="26" repeaty="51" priority="35"/>
-            <row type="EMPTY" startx="0" starty="0" priority="100"/>
-            <row type="EMPTY" startx="0" starty="154" priority="100"/>
-            <col type="memory" startx="9" starty="1" priority="21"/>
-            <col type="memory" startx="9" starty="27" priority="22"/>
-            <col type="memory" startx="9" starty="78" priority="23"/>
-            <col type="memory" startx="9" starty="129" priority="24"/>
-            <col type="mult_36" startx="14" starty="1" priority="21"/>
-            <col type="mult_36" startx="14" starty="27" priority="22"/>
-            <col type="mult_36" startx="14" starty="78" priority="23"/>
-            <col type="mult_36" startx="14" starty="129" priority="24"/>
-            <region type="EMPTY" startx="20" endx="31" starty="1" endy="102" priority="35"/>
-        </fixed_layout>
+      <auto_layout aspect_ratio="1.0">
+        <!--Perimeter of 'io' blocks with 'EMPTY' blocks at corners-->
+        <perimeter type="io" priority="100"/>
+        <corners type="EMPTY" priority="101"/>
+        <!--Fill with 'clb'-->
+        <fill type="clb" priority="10"/>
+        <col type="mult_36" startx="6" starty="1" repeatx="8" priority="20"/>
+        <col type="EMPTY" startx="6" repeatx="8" starty="1" priority="19"/>
+        <!--Column of 'memory' with 'EMPTY' blocks wherever a 'memory' does not fit. Vertical offset by 1 for perimeter.-->
+        <col type="memory" startx="2" starty="1" repeatx="8" priority="20"/>
+        <col type="EMPTY" startx="2" repeatx="8" starty="1" priority="19"/>
+      </auto_layout>
     </layout>
 
     <device>
@@ -156,8 +145,8 @@
     <segmentlist>
         <segment freq="1.000000" length="4" type="unidir" Rmetal="101" Cmetal="22.5e-15">
             <mux name="0"/>
-            <sb type="pattern">1 1 1 1 1</sb>
-            <cb type="pattern">1 1 1 1</cb>
+            <sb type="pattern">1 0 0 0 1</sb>
+            <cb type="pattern">1 0 0 1</cb>
         </segment>
     </segmentlist>
     
