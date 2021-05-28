@@ -1,17 +1,6 @@
 <!-- 
-  Architecture with no fracturable LUTs
-
-  - 40 nm technology
-  - General purpose logic block: 
-    K = 6, N = 10
-  - Routing architecture: L = 4, fc_in = 0.15, Fc_out = 0.1
-
-  Details on Modelling:
-
-  Based on flagship k6_frac_N10_mem32K_40nm.xml architecture.  This architecture has no fracturable LUTs nor any heterogeneous blocks.
-
-
-  Authors: Jason Luu, Jeff Goeders, Vaughn Betz
+  Test Arch 4
+  Modified k6_frac_N10_mem32K_40nm.xml architecture.
 -->
 <architecture>
   <!-- 
