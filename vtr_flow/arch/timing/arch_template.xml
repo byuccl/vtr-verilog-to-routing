@@ -4,9 +4,9 @@
 <architecture>
 
   <models>
-   <!-- Each <model> tag describes the BLIF .subckt model names that are accepted by the FPGA architecture. 
+    <!-- Each <model> tag describes the BLIF .subckt model names that are accepted by the FPGA architecture. 
         The name of the model must match the corresponding name of the BLIF model. -->
-   <!-- MODEL TEMPLATE
+    <!-- MODEL TEMPLATE
     <model name="name string">
       <input_ports>
         <port name="string" is_clock="{0 | 1} clock="string" combinational_sink_ports="string1 string2 ..."/>
@@ -20,9 +20,9 @@
   </models>
 
   <tiles>
-   <!-- The content within the <tiles> describes the physical tiles available in the FPGA. Each tile type 
+    <!-- The content within the <tiles> describes the physical tiles available in the FPGA. Each tile type 
         is specified with the <tile> tag withing the <tiles> tag. -->
-   <!-- Main Tags:  
+    <!-- Main Tags:  
           <tile name="string" capacity="int" width="int" height="int" area="float"/> 
             Required Attributes:
               name – The name of this tile. The name must be unique with respect to any other sibling <tile> tag.
@@ -71,7 +71,7 @@
           <loc side="{left|right|bottom|top}" xoffset="int" yoffset="int">name_of_complex_logic_block.port_name[int:int] ... </loc>
             Required Attributes:
               side – Specifies which of the four sides of a grid location the pins in the contents are located. -->
-   <!-- TILES TEMPLATE
+    <!-- TILES TEMPLATE
     <tile name="io" area="0">
       <sub_tile name="io" capacity="8">
         <equivalent_sites>
@@ -104,8 +104,8 @@
   </tiles>
 
   <layout>
-   <!-- Content inside this tag specifies device grid layout. -->
-   <!-- Main Tags:
+    <!-- Content inside this tag specifies device grid layout. -->
+    <!-- Main Tags:
           <auto_layout aspect_ratio="floatingPointNum">
             Optional Attributes: aspect_ratio – The device grid’s target aspect ratio (width / height) Default: 1.0
             At most one <auto_layout> can be specified.
@@ -164,7 +164,7 @@
               endy – An expression specifying the vertical ending position of the region (inclusive).
               repeaty – An expression specifying the vertical repeat factor of the column.
               incry – An expression specifying the horizontal increment between block instantiations within the region. -->
-   <!-- LAYOUT TEMPLATE
+    <!-- LAYOUT TEMPLATE
     //Specifies an auto-scaling square FPGA floorplan
     <auto_layout aspect_ratio="1.0">
         // Create I/Os around the device perimeter
@@ -187,8 +187,8 @@
   </layout>
 
   <device>
-   <!-- Content inside this tag specifies device information. -->
-   <!-- Main tags:
+    <!-- Content inside this tag specifies device information. -->
+    <!-- Main tags:
           <sizing R_minW_nmos="float" R_minW_pmos="float"/>
             Required Attributes:
               R_minW_nmos – The resistance of minimum-width nmos transistor. This data is used only by the area model built into VPR.
@@ -203,7 +203,7 @@
               fs – The value of fs
           <chan_width_distr>content</chan_width_distr>
           <default_fc in_type="{frac|abs}" in_val="{int|float}" out_type="{frac|abs}" out_val="{int|float}"/> -->
-   <!-- DEVICE TEMPLATE
+    <!-- DEVICE TEMPLATE
     <sizing R_minW_nmos="8926" R_minW_pmos="16067"/>
     <area grid_logic_tile_area="0"/>
     <chan_width_distr>
@@ -336,7 +336,7 @@
               name – The name of the pattern.
               in_port – The input pins of the edges for this pattern.
               out_port – Which output pins of the edges for this pattern. -->
-   <!-- COMPLEXBLOCKLIST TEMPLATE
+    <!-- COMPLEXBLOCKLIST TEMPLATE
     <pb_type name="io">
       <input name="outpad" num_pins="1"/>
       <output name="inpad" num_pins="1"/>

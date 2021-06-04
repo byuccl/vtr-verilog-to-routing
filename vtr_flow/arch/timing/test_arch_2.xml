@@ -161,8 +161,8 @@
 	  -->
     <area grid_logic_tile_area="0"/>
     <chan_width_distr>
-      <x distr="uniform" peak="0.80000"/>
-      <y distr="uniform" peak="0.80000"/>
+      <x distr="uniform" peak="1.00000"/>
+      <y distr="uniform" peak="1.00000"/>
     </chan_width_distr>
     <switch_block type="wilton" fs="3"/>
     <connection_block input_switch_name="ipin_cblock"/>
