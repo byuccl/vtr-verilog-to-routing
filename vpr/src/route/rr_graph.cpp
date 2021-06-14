@@ -439,6 +439,9 @@ static void build_rr_graph(const t_graph_type graph_type,
 
     /* Global routing uses a single longwire track */
     int max_chan_width = (is_global_graph ? 1 : nodes_per_chan.max);
+    VTR_LOG("\n");
+    VTR_LOG("Max Channel Width: %d\n", max_chan_width);
+    VTR_LOG("\n");
     VTR_ASSERT(max_chan_width > 0);
 
     auto& device_ctx = g_vpr_ctx.mutable_device();
