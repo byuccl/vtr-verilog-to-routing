@@ -61,14 +61,14 @@ void CheckSetup(const t_packer_opts& PackerOpts,
         }
     }
 
-    if (DETAILED == RouterOpts.route_type) {
-        if ((Chans.chan_x_dist.type != UNIFORM)
-            || (Chans.chan_y_dist.type != UNIFORM)
-            || (Chans.chan_x_dist.peak != Chans.chan_y_dist.peak)) {
-            VPR_FATAL_ERROR(VPR_ERROR_OTHER,
-                            "Detailed routing currently only supported on FPGAs with all channels of equal width.\n");
-        }
-    }
+    // if (DETAILED == RouterOpts.route_type) {
+    //     if ((Chans.chan_x_dist.type != UNIFORM)
+    //         || (Chans.chan_y_dist.type != UNIFORM)
+    //         || (Chans.chan_x_dist.peak != Chans.chan_y_dist.peak)) {
+    //         VPR_FATAL_ERROR(VPR_ERROR_OTHER,
+    //                         "Detailed routing currently only supported on FPGAs with all channels of equal width.\n");
+    //     }
+    // }
 
     for (i = 0; i < (int)Segments.size(); ++i) {
         Tmp = Segments[i].arch_opin_switch;
