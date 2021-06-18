@@ -130,3 +130,7 @@ tags
 #
 .vscode
 .history
+
+# Text to CSV converter
+vtr_flow/tasks/regression_tests/vtr_reg_basic/basic_timing/config/txt_to_csv.py
+vtr_flow/scripts/txt_to_csv.py
