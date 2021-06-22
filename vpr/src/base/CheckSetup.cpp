@@ -12,7 +12,8 @@ void CheckSetup(const t_packer_opts& PackerOpts,
                 const t_router_opts& RouterOpts,
                 const t_det_routing_arch& RoutingArch,
                 const std::vector<t_segment_inf>& Segments,
-                const t_timing_inf Timing) {
+                const t_timing_inf Timing,
+                const t_chan_width_dist Chans) {
     int i;
     int Tmp;
 
@@ -60,14 +61,13 @@ void CheckSetup(const t_packer_opts& PackerOpts,
         }
     }
 
-    // if (DETAILED == RouterOpts.route_type) {
-    //     if ((Chans.chan_x_dist.type != UNIFORM)
-    //         || (Chans.chan_y_dist.type != UNIFORM)
-    //         || (Chans.chan_x_dist.peak != Chans.chan_y_dist.peak)) {
-    //         VPR_FATAL_ERROR(VPR_ERROR_OTHER,
-    //                         "Detailed routing currently only supported on FPGAs with all channels of equal width.\n");
-    //     }
-    // }
+    if (DETAILED == RouterOpts.route_type) {
+        if ((Chans.chan_x_dist.type != UNIFORM)
+            || (Chans.chan_y_dist.type != UNIFORM)) {
+            VPR_FATAL_ERROR(VPR_ERROR_OTHER,
+                            "Detailed routing currently only supported on FPGAs with uniform channel distributions.\n");
+        }
+    }
 
     for (i = 0; i < (int)Segments.size(); ++i) {
         Tmp = Segments[i].arch_opin_switch;
