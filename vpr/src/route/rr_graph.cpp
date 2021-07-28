@@ -125,6 +125,10 @@ static void build_unidir_rr_opins(RRGraphBuilder& rr_graph_builder,
                                   const DeviceGrid& grid,
                                   const std::vector<vtr::Matrix<int>>& Fc_out,
                                   const int max_chan_width,
+                                  const int* sets_per_seg_type_x,
+                                  const int* sets_per_seg_type_y,
+                                  const t_chan_width& chan_width,
+                                  const enum e_directionality directionality,
                                   const t_chan_details& chan_details_x,
                                   const t_chan_details& chan_details_y,
                                   vtr::NdMatrix<int, 3>& Fc_xofs,
@@ -170,6 +174,8 @@ static std::function<void(t_chan_width*)> alloc_and_load_rr_graph(RRGraphBuilder
                                                                   vtr::NdMatrix<int, 3>& Fc_yofs,
                                                                   t_rr_node_indices& L_rr_node_indices,
                                                                   const int max_chan_width,
+                                                                  const int* sets_per_seg_type_x,
+                                                                  const int* sets_per_seg_type_y,
                                                                   const t_chan_width& chan_width,
                                                                   const int wire_to_ipin_switch,
                                                                   const int delayless_switch,
@@ -277,7 +283,9 @@ static t_seg_details* alloc_and_load_global_route_seg_details(const int global_r
 static std::vector<vtr::Matrix<int>> alloc_and_load_actual_fc(const std::vector<t_physical_tile_type>& types,
                                                               const int max_pins,
                                                               const std::vector<t_segment_inf>& segment_inf,
-                                                              const int* sets_per_seg_type,
+                                                              const int* sets_per_seg_type_x,
+                                                              const int* sets_per_seg_type_y,
+                                                              t_chan_width nodes_per_chan,
                                                               const int max_chan_width,
                                                               const e_fc_type fc_type,
                                                               const enum e_directionality directionality,
@@ -309,6 +317,8 @@ static void build_rr_graph(const t_graph_type graph_type,
                            const int num_directs,
                            int* wire_to_rr_ipin_switch,
                            int* Warnings);
+
+std::vector<t_pin_loc> get_pin_loc(const e_pin_type pin_type, const t_physical_tile_type_ptr Type);
 
 /******************* Subroutine definitions *******************************/
 
@@ -445,7 +455,8 @@ static void build_rr_graph(const t_graph_type graph_type,
     /* Global routing uses a single longwire track */
     int max_chan_width = (is_global_graph ? 1 : nodes_per_chan.max);
     VTR_LOG("\n");
-    VTR_LOG("Max Channel Width: %d\n", max_chan_width);
+    VTR_LOG("Max X Channel Width: %d\n", nodes_per_chan.x_max);
+    VTR_LOG("Max Y Channel Width: %d\n", nodes_per_chan.y_max);
     VTR_LOG("\n");
     VTR_ASSERT(max_chan_width > 0);
 
@@ -471,6 +482,8 @@ static void build_rr_graph(const t_graph_type graph_type,
          * changed. Warning should be singled to caller if this happens. */
         size_t max_dim = std::max(grid.width(), grid.height()) - 2; //-2 for no perim channels
 
+        /* Bryce is working on this section. This likely needs to be split into x and y segment details *
+         * and needs to accept the appropriate x or y max channel width                                 */
         seg_details = alloc_and_load_seg_details(&max_chan_width,
                                                  max_dim, segment_inf,
                                                  use_full_seg_groups, is_global_graph, directionality,
@@ -492,6 +505,7 @@ static void build_rr_graph(const t_graph_type graph_type,
     t_chan_details chan_details_x;
     t_chan_details chan_details_y;
 
+    /* This might already be split into x and y channels correctly, but needs to be verified */
     alloc_and_load_chan_details(grid, &nodes_per_chan,
                                 num_seg_details, seg_details,
                                 chan_details_x, chan_details_y);
@@ -503,7 +517,7 @@ static void build_rr_graph(const t_graph_type graph_type,
     /* END CHAN_DETAILS */
 
     /* START FC */
-    /* Determine the actual value of Fc */
+    /* Contains the actual Fc value for a particular block type, pin, and segment combination */
     std::vector<vtr::Matrix<int>> Fc_in;  /* [0..device_ctx.num_block_types-1][0..num_pins-1][0..num_segments-1] */
     std::vector<vtr::Matrix<int>> Fc_out; /* [0..device_ctx.num_block_types-1][0..num_pins-1][0..num_segments-1] */
 
@@ -520,13 +534,25 @@ static void build_rr_graph(const t_graph_type graph_type,
     }
 
     /* get the number of 'sets' for each segment type -- unidirectial architectures have two tracks in a set, bidirectional have one */
-    int total_sets = max_chan_width;
-    if (directionality == UNI_DIRECTIONAL) {
-        VTR_ASSERT(max_chan_width % 2 == 0);
-        total_sets /= 2;
+    int total_sets_x;
+    if (is_global_graph) {
+        total_sets_x = max_chan_width;
+    } else {
+        total_sets_x = nodes_per_chan.x_max;
     }
-    auto sets_per_seg_type = get_seg_track_counts(total_sets, segment_inf, use_full_seg_groups);
+    int total_sets_y = nodes_per_chan.y_max;
+    if (directionality == UNI_DIRECTIONAL) {
+        VTR_ASSERT(nodes_per_chan.x_max % 2 == 0);
+        VTR_ASSERT(nodes_per_chan.y_max % 2 == 0);
+        total_sets_x /= 2;
+        total_sets_y /= 2;
+    }
+    /* The get_seg_track_counts function shouldn't need to be modified, but produces results that vary based on channel  *
+     * width and the total_sets parameter. We can get a sets_per_seg_type for the x and y direction                      */
+    auto sets_per_seg_type_x = get_seg_track_counts(total_sets_x, segment_inf, use_full_seg_groups);
+    auto sets_per_seg_type_y = get_seg_track_counts(total_sets_y, segment_inf, use_full_seg_groups);
 
+    // Can ignore global graph channel width changes for now.
     if (is_global_graph) {
         //All pins can connect during global routing
         auto ones = vtr::Matrix<int>({size_t(max_pins), segment_inf.size()}, 1);
@@ -534,13 +560,15 @@ static void build_rr_graph(const t_graph_type graph_type,
         Fc_out = std::vector<vtr::Matrix<int>>(types.size(), ones);
     } else {
         bool Fc_clipped = false;
-        Fc_in = alloc_and_load_actual_fc(types, max_pins, segment_inf, sets_per_seg_type.get(), max_chan_width,
+        /* Already modified alloc_and_load_actual_fc to consider the side of the logic block a pin is attached in *
+         * order to determine the correct ratio of connections that it can make.                                  */
+        Fc_in = alloc_and_load_actual_fc(types, max_pins, segment_inf, sets_per_seg_type_x.get(), sets_per_seg_type_y.get(), nodes_per_chan, max_chan_width,
                                          e_fc_type::IN, directionality, &Fc_clipped);
         if (Fc_clipped) {
             *Warnings |= RR_GRAPH_WARN_FC_CLIPPED;
         }
         Fc_clipped = false;
-        Fc_out = alloc_and_load_actual_fc(types, max_pins, segment_inf, sets_per_seg_type.get(), max_chan_width,
+        Fc_out = alloc_and_load_actual_fc(types, max_pins, segment_inf, sets_per_seg_type_x.get(), sets_per_seg_type_y.get(), nodes_per_chan, max_chan_width,
                                           e_fc_type::OUT, directionality, &Fc_clipped);
         if (Fc_clipped) {
             *Warnings |= RR_GRAPH_WARN_FC_CLIPPED;
@@ -575,13 +603,15 @@ static void build_rr_graph(const t_graph_type graph_type,
         }
     }
 
+    // Not sure what perturbation is. This may also need to be modified since it uses sets_per_seg_type.
     auto perturb_ipins = alloc_and_load_perturb_ipins(types.size(), segment_inf.size(),
-                                                      sets_per_seg_type.get(), Fc_in, Fc_out, directionality);
+                                                      sets_per_seg_type_x.get(), Fc_in, Fc_out, directionality);
     /* END FC */
 
     /* Alloc node lookups, count nodes, alloc rr nodes */
     int num_rr_nodes = 0;
 
+    // Might need to be modifed because it uses the chan width.
     alloc_and_load_rr_node_indices(device_ctx.rr_graph_builder,
                                    max_chan_width, grid,
                                    &num_rr_nodes, chan_details_x, chan_details_y);
@@ -667,10 +697,17 @@ static void build_rr_graph(const t_graph_type graph_type,
     t_track_to_pin_lookup track_to_pin_lookup(types.size()); /* [0..device_ctx.physical_tile_types.size()-1][0..max_chan_width-1][0..width][0..height][0..3] */
 
     for (unsigned int itype = 0; itype < types.size(); ++itype) {
-        ipin_to_track_map[itype] = alloc_and_load_pin_to_track_map(RECEIVER,
-                                                                   Fc_in[itype], &types[itype], perturb_ipins[itype], directionality,
-                                                                   segment_inf.size(), sets_per_seg_type.get());
-
+        /* Likely needs to be modified because it uses Fc values and sets_per_seg_type */
+        if ((nodes_per_chan.x_max == nodes_per_chan.y_max) || (nodes_per_chan.x_max > nodes_per_chan.y_max) || is_global_graph) {
+            ipin_to_track_map[itype] = alloc_and_load_pin_to_track_map(RECEIVER,
+                                                                       Fc_in[itype], &types[itype], perturb_ipins[itype], directionality,
+                                                                       segment_inf.size(), sets_per_seg_type_x.get());
+        } else {
+            ipin_to_track_map[itype] = alloc_and_load_pin_to_track_map(RECEIVER,
+                                                                       Fc_in[itype], &types[itype], perturb_ipins[itype], directionality,
+                                                                       segment_inf.size(), sets_per_seg_type_y.get());
+        }
+        /* Also might need to be modified because it uses Fc values and the max chan width */
         track_to_pin_lookup[itype] = alloc_and_load_track_to_pin_lookup(ipin_to_track_map[itype], Fc_in[itype], types[itype].width, types[itype].height,
                                                                         types[itype].num_pins, max_chan_width, segment_inf.size());
     }
@@ -680,13 +717,14 @@ static void build_rr_graph(const t_graph_type graph_type,
     /* Create opin map lookups */
     t_pin_to_track_lookup opin_to_track_map(types.size()); /* [0..device_ctx.physical_tile_types.size()-1][0..num_pins-1][0..width][0..height][0..3][0..Fc-1] */
 
+    // Bidirectional likely needs the same modifications
     if (BI_DIRECTIONAL == directionality) {
         for (unsigned int itype = 0; itype < types.size(); ++itype) {
             auto perturb_opins = alloc_and_load_perturb_opins(&types[itype], Fc_out[itype],
                                                               max_chan_width, segment_inf);
             opin_to_track_map[itype] = alloc_and_load_pin_to_track_map(DRIVER,
                                                                        Fc_out[itype], &types[itype], perturb_opins, directionality,
-                                                                       segment_inf.size(), sets_per_seg_type.get());
+                                                                       segment_inf.size(), sets_per_seg_type_x.get());
         }
     }
     /* END OPIN MAP */
@@ -700,6 +738,8 @@ static void build_rr_graph(const t_graph_type graph_type,
         switch_block_conn, sb_conn_map, grid, Fs, unidir_sb_pattern,
         Fc_out, Fc_xofs, Fc_yofs, device_ctx.rr_node_indices,
         max_chan_width,
+        sets_per_seg_type_x.get(),
+        sets_per_seg_type_y.get(),
         nodes_per_chan,
         wire_to_arch_ipin_switch,
         delayless_switch,
@@ -1002,11 +1042,26 @@ static t_seg_details* alloc_and_load_global_route_seg_details(const int global_r
     return seg_details;
 }
 
-/* Calculates the number of track connections from each block pin to each segment type */
+/**
+ * @brief Calculates the number of track connections from each block pin to each segment type.
+ * 
+ *   @param types               Vector containing all block types (Empty, io, clb, memory, etc)
+ *   @param max_pins            Number of io pins of the type with the most pins
+ *   @param segment_inf         Vector containing each type of segment
+ *   @param sets_per_seg_type_x Number of wire sets for each type of segment in the x direction (Ex: If unidir, one segment, channel width 100, there will be 50 sets with 2 wires each)
+ *   @param sets_per_seg_type_y Number of wire sets for each type of segment in the y direction (Ex: If unidir, one segment, channel width 100, there will be 50 sets with 2 wires each)
+ *   @param nodes_per_chan      Data structure containing the channel widths in the x and y directions
+ *   @param max_chan_width      Max channel width (Number of wires in channel)
+ *   @param fc_type             Describes if the fc specification for an input or output pin
+ *   @param directionality      Graph directionality (Unidirectional or bidirectional)
+ *   @param Fc_clipped          Returns if the matrix was clipped to the max number of wires
+ */
 static std::vector<vtr::Matrix<int>> alloc_and_load_actual_fc(const std::vector<t_physical_tile_type>& types,
                                                               const int max_pins,
                                                               const std::vector<t_segment_inf>& segment_inf,
-                                                              const int* sets_per_seg_type,
+                                                              const int* sets_per_seg_type_x,
+                                                              const int* sets_per_seg_type_y,
+                                                              t_chan_width nodes_per_chan,
                                                               const int max_chan_width,
                                                               const e_fc_type fc_type,
                                                               const enum e_directionality directionality,
@@ -1042,13 +1097,36 @@ static std::vector<vtr::Matrix<int>> alloc_and_load_actual_fc(const std::vector<
                 }
             } else {
                 /* General case indicating that this pin connects to general-purpose routing */
-
                 //Calculate how many connections there should be accross all the pins in this fc_spec
                 int total_connections = 0;
+                int total_x_connections = 0;
+                int total_y_connections = 0;
                 if (fc_spec.fc_value_type == e_fc_value_type::FRACTIONAL) {
-                    float conns_per_pin = fac * sets_per_seg_type[iseg] * fc_spec.fc_value;
+                    float x_conns_per_pin = 0;
+                    float y_conns_per_pin = 0;
+                    for (int width_offset = 0; width_offset < type.width; ++width_offset) {
+                        for (int height_offset = 0; height_offset < type.height; ++height_offset) {
+                            for (int ipin : fc_spec.pins) {
+                                if (type.pinloc[width_offset][height_offset][BOTTOM][ipin] && type.pinloc[width_offset][height_offset][LEFT][ipin] && (nodes_per_chan.x_max > nodes_per_chan.y_max)) {
+                                    x_conns_per_pin += fac * sets_per_seg_type_x[iseg] * fc_spec.fc_value;
+                                } else if (type.pinloc[width_offset][height_offset][BOTTOM][ipin] && type.pinloc[width_offset][height_offset][LEFT][ipin] && (nodes_per_chan.y_max > nodes_per_chan.x_max)) {
+                                    y_conns_per_pin += fac * sets_per_seg_type_y[iseg] * fc_spec.fc_value;
+                                } else {
+                                    if (type.pinloc[width_offset][height_offset][BOTTOM][ipin] || type.pinloc[width_offset][height_offset][TOP][ipin]) {
+                                        x_conns_per_pin += fac * sets_per_seg_type_x[iseg] * fc_spec.fc_value;
+                                    } else if (type.pinloc[width_offset][height_offset][LEFT][ipin] || type.pinloc[width_offset][height_offset][RIGHT][ipin]) {
+                                        y_conns_per_pin += fac * sets_per_seg_type_y[iseg] * fc_spec.fc_value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    float conns_per_pin = fac * sets_per_seg_type_x[iseg] * fc_spec.fc_value;
                     float flt_total_connections = conns_per_pin * fc_spec.pins.size();
                     total_connections = vtr::nint(flt_total_connections); //Round to integer
+
+                    total_x_connections = vtr::nint(x_conns_per_pin); //Round to integer
+                    total_y_connections = vtr::nint(y_conns_per_pin); //Round to integer
                 } else {
                     VTR_ASSERT(fc_spec.fc_value_type == e_fc_value_type::ABSOLUTE);
 
@@ -1075,6 +1153,8 @@ static std::vector<vtr::Matrix<int>> alloc_and_load_actual_fc(const std::vector<
 
                 //Ensure total evenly divides fac by adding the remainder
                 total_connections += (total_connections % fac);
+                total_x_connections += (total_x_connections % fac);
+                total_y_connections += (total_y_connections % fac);
 
                 VTR_ASSERT(total_connections > 0);
                 VTR_ASSERT(total_connections % fac == 0);
@@ -1084,29 +1164,66 @@ static std::vector<vtr::Matrix<int>> alloc_and_load_actual_fc(const std::vector<
                 //as evenly as possible (if total_connections % pins.size() != 0, there will be
                 //some inevitable imbalance).
                 int connections_remaining = total_connections;
-                while (connections_remaining != 0) {
-                    //Add one set of connections to each pin
-                    for (int ipin : fc_spec.pins) {
-                        if (connections_remaining >= fac) {
-                            Fc[itype][ipin][iseg] += fac;
-                            connections_remaining -= fac;
-                        } else {
-                            VTR_ASSERT(connections_remaining == 0);
-                            break;
+                int x_connections_remaining = total_x_connections;
+                int y_connections_remaining = total_y_connections;
+
+                //Use one set of connections if horizontal and vertical channel widths are the same
+                if (nodes_per_chan.x_max == nodes_per_chan.y_max) {
+                    while (connections_remaining != 0) {
+                        //Add one set of connections to each pin while there are connections remaining
+                        for (int ipin : fc_spec.pins) {
+                            if (connections_remaining >= fac) {
+                                Fc[itype][ipin][iseg] += fac;
+                                connections_remaining -= fac;
+                            } else {
+                                VTR_ASSERT(connections_remaining == 0);
+                                break;
+                            }
                         }
                     }
-                }
+                    for (int ipin : fc_spec.pins) {
+                        //It is possible that we may want more connections that wires of this type exist;
+                        //clip to the maximum number of wires
+                        if (Fc[itype][ipin][iseg] > sets_per_seg_type_x[iseg] * fac) {
+                            *Fc_clipped = true;
+                            Fc[itype][ipin][iseg] = sets_per_seg_type_x[iseg] * fac;
+                        }
 
-                for (int ipin : fc_spec.pins) {
-                    //It is possible that we may want more connections that wires of this type exist;
-                    //clip to the maximum number of wires
-                    if (Fc[itype][ipin][iseg] > sets_per_seg_type[iseg] * fac) {
-                        *Fc_clipped = true;
-                        Fc[itype][ipin][iseg] = sets_per_seg_type[iseg] * fac;
+                        VTR_ASSERT_MSG(Fc[itype][ipin][iseg] >= 0, "Calculated absolute Fc must be positive");
+                        VTR_ASSERT_MSG(Fc[itype][ipin][iseg] % fac == 0, "Calculated absolute Fc must be divisible by 1 (bidir architecture) or 2 (unidir architecture)"); //Required by connection block construction code
                     }
-
-                    VTR_ASSERT_MSG(Fc[itype][ipin][iseg] >= 0, "Calculated absolute Fc must be positive");
-                    VTR_ASSERT_MSG(Fc[itype][ipin][iseg] % fac == 0, "Calculated absolute Fc must be divisible by 1 (bidir architecture) or 2 (unidir architecture)"); //Required by connection block construction code
+                } else {
+                    while (x_connections_remaining != 0 || y_connections_remaining != 0) {
+                        for (int width_offset = 0; width_offset < type.width; ++width_offset) {
+                            for (int height_offset = 0; height_offset < type.height; ++height_offset) {
+                                for (int ipin : fc_spec.pins) {
+                                    if (type.pinloc[width_offset][height_offset][BOTTOM][ipin] && type.pinloc[width_offset][height_offset][LEFT][ipin] && (nodes_per_chan.x_max > nodes_per_chan.y_max)) {
+                                        if (x_connections_remaining >= fac) {
+                                            Fc[itype][ipin][iseg] += fac;
+                                            x_connections_remaining -= fac;
+                                        }
+                                    } else if (type.pinloc[width_offset][height_offset][BOTTOM][ipin] && type.pinloc[width_offset][height_offset][LEFT][ipin] && (nodes_per_chan.y_max > nodes_per_chan.x_max)) {
+                                        if (y_connections_remaining >= fac) {
+                                            Fc[itype][ipin][iseg] += fac;
+                                            y_connections_remaining -= fac;
+                                        }
+                                    } else {
+                                        if (type.pinloc[width_offset][height_offset][BOTTOM][ipin] || type.pinloc[width_offset][height_offset][TOP][ipin]) {
+                                            if (x_connections_remaining >= fac) {
+                                                Fc[itype][ipin][iseg] += fac;
+                                                x_connections_remaining -= fac;
+                                            }
+                                        } else if (type.pinloc[width_offset][height_offset][LEFT][ipin] || type.pinloc[width_offset][height_offset][RIGHT][ipin]) {
+                                            if (y_connections_remaining >= fac) {
+                                                Fc[itype][ipin][iseg] += fac;
+                                                y_connections_remaining -= fac;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1157,6 +1274,8 @@ static std::function<void(t_chan_width*)> alloc_and_load_rr_graph(RRGraphBuilder
                                                                   vtr::NdMatrix<int, 3>& Fc_yofs,
                                                                   t_rr_node_indices& L_rr_node_indices,
                                                                   const int max_chan_width,
+                                                                  const int* sets_per_seg_type_x,
+                                                                  const int* sets_per_seg_type_y,
                                                                   const t_chan_width& chan_width,
                                                                   const int wire_to_ipin_switch,
                                                                   const int delayless_switch,
@@ -1212,8 +1331,8 @@ static std::function<void(t_chan_width*)> alloc_and_load_rr_graph(RRGraphBuilder
                 } else {
                     VTR_ASSERT(UNI_DIRECTIONAL == directionality);
                     bool clipped;
-                    build_unidir_rr_opins(rr_graph_builder, i, j, side, grid, Fc_out, max_chan_width,
-                                          chan_details_x, chan_details_y, Fc_xofs, Fc_yofs,
+                    build_unidir_rr_opins(rr_graph_builder, i, j, side, grid, Fc_out, max_chan_width, sets_per_seg_type_x, sets_per_seg_type_y, chan_width,
+                                          directionality, chan_details_x, chan_details_y, Fc_xofs, Fc_yofs,
                                           rr_edges_to_create, &clipped, L_rr_node_indices, L_rr_node,
                                           directs, num_directs, clb_to_clb_directs, num_seg_types, &scratchpad);
                     if (clipped) {
@@ -1716,8 +1835,17 @@ void alloc_and_load_edges(t_rr_graph_storage& L_rr_node,
     L_rr_node.alloc_and_load_edges(&rr_edges_to_create);
 }
 
-/* allocate pin to track map for each segment type individually and then combine into a single
- * vector */
+/**
+ * @brief allocate pin to track map for each segment type individually and then combine into a single vector
+ * 
+ *   @param pin_type                A pin may be unconnected (OPEN), driving a net (DRIVER), or in the fanout (RECEIVER)
+ *   @param Fc                      Specifies the actual Fc value for a particular block type, pin, and segment combination
+ *   @param Type                    Block type (Empty, io, clb, memory, etc)
+ *   @param perturb_switch_pattern  
+ *   @param directionality          Graph directionality (Unidirectional or bidirectional)
+ *   @param num_seg_types           Number of different segment types specified in architecture
+ *   @param sets_per_seg_type       Number of wire sets for each type of segment (Ex: If unidir, one segment, channel width 100, there will be 50 sets with 2 wires each)
+ */
 static vtr::NdMatrix<std::vector<int>, 4> alloc_and_load_pin_to_track_map(const e_pin_type pin_type,
                                                                           const vtr::Matrix<int>& Fc,
                                                                           const t_physical_tile_type_ptr Type,
@@ -1725,21 +1853,6 @@ static vtr::NdMatrix<std::vector<int>, 4> alloc_and_load_pin_to_track_map(const 
                                                                           const e_directionality directionality,
                                                                           const int num_seg_types,
                                                                           const int* sets_per_seg_type) {
-    /* get the maximum number of tracks that any pin can connect to */
-    size_t max_pin_tracks = 0;
-    for (int iseg = 0; iseg < num_seg_types; iseg++) {
-        /* determine the maximum Fc to this segment type across all pins */
-        int max_Fc = 0;
-        for (int pin_index = 0; pin_index < Type->num_pins; ++pin_index) {
-            int pin_class = Type->pin_class[pin_index];
-            if (Fc[pin_index][iseg] > max_Fc && Type->class_inf[pin_class].type == pin_type) {
-                max_Fc = Fc[pin_index][iseg];
-            }
-        }
-
-        max_pin_tracks += max_Fc;
-    }
-
     /* allocate 'result' matrix and initialize entries to OPEN. also allocate and intialize matrix which will be
      * used to index into the correct entries when loading up 'result' */
 
@@ -1803,6 +1916,7 @@ static vtr::NdMatrix<std::vector<int>, 4> alloc_and_load_pin_to_track_map(const 
     return result;
 }
 
+// Modify to allow for a num_seg_type_tracks in both the x and y direction
 static vtr::NdMatrix<int, 5> alloc_and_load_pin_to_seg_type(const e_pin_type pin_type,
                                                             const int num_seg_type_tracks,
                                                             const int Fc,
@@ -2512,6 +2626,10 @@ static void build_unidir_rr_opins(RRGraphBuilder& rr_graph_builder,
                                   const DeviceGrid& grid,
                                   const std::vector<vtr::Matrix<int>>& Fc_out,
                                   const int max_chan_width,
+                                  const int* sets_per_seg_type_x,
+                                  const int* sets_per_seg_type_y,
+                                  const t_chan_width& chan_width,
+                                  const enum e_directionality directionality,
                                   const t_chan_details& chan_details_x,
                                   const t_chan_details& chan_details_y,
                                   vtr::NdMatrix<int, 3>& Fc_xofs,
@@ -2574,6 +2692,19 @@ static void build_unidir_rr_opins(RRGraphBuilder& rr_graph_builder,
             vtr::NdMatrix<int, 3>& Fc_ofs = (vert ? Fc_xofs : Fc_yofs);
             if (false == pos_dir) {
                 --chan;
+            }
+
+            int fac = 1;
+            if (UNI_DIRECTIONAL == directionality) {
+                fac = 2;
+            }
+
+            if ((type->pinloc[width_offset][height_offset][LEFT][pin_index] && type->pinloc[width_offset][height_offset][RIGHT][pin_index]) && (chan_width.x_max > chan_width.y_max) && (chan_type == CHANY)) {
+                seg_type_Fc = vtr::nint(fac * sets_per_seg_type_y[iseg] * type->fc_specs[pin_index].fc_value);
+                seg_type_Fc += (seg_type_Fc % fac);
+            } else if ((type->pinloc[width_offset][height_offset][LEFT][pin_index] && type->pinloc[width_offset][height_offset][RIGHT][pin_index]) && (chan_width.x_max < chan_width.y_max) && (chan_type == CHANX)) {
+                seg_type_Fc = vtr::nint(fac * sets_per_seg_type_x[iseg] * type->fc_specs[pin_index].fc_value);
+                seg_type_Fc += (seg_type_Fc % fac);
             }
 
             /* Skip the location if there is no channel. */
