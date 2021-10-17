@@ -287,7 +287,7 @@ class NdMatrixBase {
         data_ = std::make_unique<T[]>(size());
     }
 
-    ///@brief Returns the size of the matrix (number of elements) calucated from the current dimensions
+    ///@brief Returns the size of the matrix (number of elements) calculated from the current dimensions
     size_t calc_size() const {
         ///@brief Size is the product of all dimension sizes
         size_t cnt = dim_size(0);

@@ -120,7 +120,7 @@ class t_rr_graph_view;
 //
 // Usage notes and assumptions:
 //
-// This class broadly speak is used by two types of code:
+// This class is broadly used by two types of code:
 //  - Code that writes to the rr graph
 //  - Code that reads from the rr graph
 //
@@ -130,10 +130,10 @@ class t_rr_graph_view;
 //  - During the reading of a static rr graph from a file in rr_graph_reader
 //  / rr_graph_uxsdcxx_serializer.
 //
-// It is expected and assume that once the graph is completed, the graph is
+// It is expected and assumed that once the graph is completed, the graph is
 // fixed until the entire graph is cleared.  This object enforces this
 // assumption with state flags.  In particular RR graph edges are assumed
-// to be write only during construction of the RR graph, and read only
+// to be written only during construction of the RR graph, and read only
 // otherwise.  See the description of the "Edge methods" for details.
 //
 // Broadly speaking there are two sets of methods.  Methods for reading and

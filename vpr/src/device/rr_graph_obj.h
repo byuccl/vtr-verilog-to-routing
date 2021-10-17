@@ -33,7 +33,7 @@
  * Note: Multiplexers are the most common type
  *
  * The switch information are categorized in the rr_switch_inf of RRGraph class.
- * rr_switch_inf is created to minimize memory footprint of RRGraph classs
+ * rr_switch_inf is created to minimize memory footprint of RRGraph class
  * While the RRG could contain millions (even much larger) of edges, there are only
  * a limited number of types of switches.
  * Hence, we use a flyweight pattern to store switch-related information that differs
@@ -85,9 +85,9 @@
  * outside the rr_graph header and source files
  *
  * After build/modify a RRGraph, please do run a fundamental check, a public accessor.
- * to ensure that your RRGraph does not include invalid nodes/edges/switches/segements 
+ * to ensure that your RRGraph does not include invalid nodes/edges/switches/segments 
  * as well as connections.
- * The validate() function gurantees the consistency between internal data structures, 
+ * The validate() function guarantees the consistency between internal data structures, 
  * such as the id cross-reference between nodes and edges etc.,
  * so failing it indicates a fatal bug!
  * This is a must-do check! 
@@ -170,7 +170,7 @@
  * +---------+               +------------------------------+
  *
  * Note: if you wish to use a customized routing-cost data structure, 
- * please use the flyweigth pattern as we do for t_rr_index_data!
+ * please use the flyweight pattern as we do for t_rr_index_data!
  *
  * Access to a node/edge/switch/segment, please use the StrongId created
  * ---------------------------------------------------------------------
@@ -568,7 +568,7 @@ class RRGraph {
     /* Reserve the lists of nodes, edges, switches etc. to be memory efficient. 
      * This function is mainly used to reserve memory space inside RRGraph,
      * when adding a large number of nodes/edge/switches/segments,
-     * in order to avoid memory fragements
+     * in order to avoid memory fragments
      * For example: 
      *    RRGraph rr_graph;
      *    // Add 1000 CHANX nodes to the RRGraph object
