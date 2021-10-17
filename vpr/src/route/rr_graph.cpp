@@ -1361,6 +1361,9 @@ void free_rr_graph() {
     invalidate_router_lookahead_cache();
 }
 
+/* Loads IPIN, SINK, SOURCE, and OPIN.
+ * Loads IPIN to SINK edges, and SOURCE to OPIN edges 
+*/
 static void build_rr_sinks_sources(RRGraphBuilder& rr_graph_builder,
                                    const int i,
                                    const int j,
@@ -1368,9 +1371,6 @@ static void build_rr_sinks_sources(RRGraphBuilder& rr_graph_builder,
                                    t_rr_edge_info_set& rr_edges_to_create,
                                    const int delayless_switch,
                                    const DeviceGrid& grid) {
-    /* Loads IPIN, SINK, SOURCE, and OPIN.
-     * Loads IPIN to SINK edges, and SOURCE to OPIN edges */
-
     /* Since we share nodes within a large block, only
      * start tile can initialize sinks, sources, and pins */
     if (grid[i][j].width_offset > 0 || grid[i][j].height_offset > 0)
@@ -2472,6 +2472,11 @@ std::string describe_rr_node(int inode) {
     return msg;
 }
 
+/*
+* This routine adds the edges from opins to channels at the specified
+* grid location (i,j) and grid tile side.
+* This implements the connection box.
+*/
 static void build_unidir_rr_opins(RRGraphBuilder& rr_graph_builder,
                                   const RRGraphView& rr_graph,
                                   const int i,
@@ -2490,10 +2495,6 @@ static void build_unidir_rr_opins(RRGraphBuilder& rr_graph_builder,
                                   const int num_directs,
                                   const t_clb_to_clb_directs* clb_to_clb_directs,
                                   const int num_seg_types) {
-    /*
-     * This routine adds the edges from opins to channels at the specified
-     * grid location (i,j) and grid tile side
-     */
     *Fc_clipped = false;
 
     auto type = grid[i][j].type;
@@ -2534,12 +2535,11 @@ static void build_unidir_rr_opins(RRGraphBuilder& rr_graph_builder,
             bool pos_dir = ((side == TOP) || (side == RIGHT));
             t_rr_type chan_type = (vert ? CHANX : CHANY);
             int chan = (vert ? (j) : (i));
+            if (!pos_dir)
+                --chan;
             int seg = (vert ? (i) : (j));
             int max_len = (vert ? grid.width() : grid.height());
             vtr::NdMatrix<int, 3>& Fc_ofs = (vert ? Fc_xofs : Fc_yofs);
-            if (false == pos_dir) {
-                --chan;
-            }
 
             /* Skip the location if there is no channel. */
             if (chan < 0) {
