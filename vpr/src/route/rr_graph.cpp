@@ -1363,7 +1363,7 @@ void free_rr_graph() {
 
 /* Loads IPIN, SINK, SOURCE, and OPIN.
  * Loads IPIN to SINK edges, and SOURCE to OPIN edges 
-*/
+ */
 static void build_rr_sinks_sources(RRGraphBuilder& rr_graph_builder,
                                    const int i,
                                    const int j,
@@ -2473,10 +2473,10 @@ std::string describe_rr_node(int inode) {
 }
 
 /*
-* This routine adds the edges from opins to channels at the specified
-* grid location (i,j) and grid tile side.
-* This implements the connection box.
-*/
+ * This routine adds the edges from opins to channels at the specified
+ * grid location (i,j) and grid tile side.
+ * This implements the connection box.
+ */
 static void build_unidir_rr_opins(RRGraphBuilder& rr_graph_builder,
                                   const RRGraphView& rr_graph,
                                   const int i,
