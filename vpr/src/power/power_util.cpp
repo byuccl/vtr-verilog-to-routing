@@ -306,6 +306,8 @@ const char* interconnect_type_name(enum e_interconnect type) {
             return "mux";
         case DIRECT_INTERC:
             return "direct";
+        case PARTIAL_INTERC:
+            return "partial";
         default:
             return "";
     }
