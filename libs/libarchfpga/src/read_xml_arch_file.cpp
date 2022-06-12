@@ -1600,6 +1600,7 @@ static void ProcessInterconnect(vtr::string_internment* strings, pugi::xml_node 
     int num_delay_constant, num_delay_matrix, num_C_constant, num_C_matrix,
         num_pack_pattern;
     const char* Prop;
+    int fout;
     pugi::xml_node Cur;
     pugi::xml_node Cur2;
 
@@ -1653,10 +1654,9 @@ static void ProcessInterconnect(vtr::string_internment* strings, pugi::xml_node 
             Prop = get_attribute(Cur, "name", loc_data).value();
             mode->interconnect[i].name = vtr::strdup(Prop);
 
-            if (mode->interconnect[i].type = PARTIAL_INTERC) {
-                Prop = get_attribute(Cur, "fout", loc_data).value();
-                mode->interconnect[i].fout = vtr::strdup(Prop);
-            }
+            Prop = get_attribute(Cur, "fout", loc_data, ReqOpt::OPTIONAL).value();
+            mode->interconnect[i].fout = vtr::strdup(Prop);
+
             mode->interconnect[i].meta = ProcessMetadata(strings, Cur, loc_data);
 
             ret_interc_names = interc_names.insert(std::pair<std::string, int>(mode->interconnect[i].name, 0));

@@ -97,6 +97,7 @@ static void alloc_and_load_partial_interc_edges(t_interconnect* interconnect,
                                             t_pb_graph_pin*** input_pb_graph_node_pin_ptrs,
                                             const int num_input_sets,
                                             const int* num_input_ptrs,
+                                            const char* fout,
                                             t_pb_graph_pin*** output_pb_graph_node_pin_ptrs,
                                             const int num_output_sets,
                                             const int* num_output_ptrs);
@@ -633,7 +634,9 @@ static void alloc_and_load_mode_interconnect(t_pb_graph_node* pb_graph_parent_no
             case PARTIAL_INTERC:
                 alloc_and_load_partial_interc_edges(&mode->interconnect[i],
                                                 input_pb_graph_node_pins, num_input_pb_graph_node_sets,
-                                                num_input_pb_graph_node_pins, output_pb_graph_node_pins,
+                                                num_input_pb_graph_node_pins,
+                                                mode->interconnect[i].fout, 
+                                                output_pb_graph_node_pins,
                                                 num_output_pb_graph_node_sets,
                                                 num_output_pb_graph_node_pins);
 
@@ -1015,6 +1018,7 @@ static void alloc_and_load_partial_interc_edges(t_interconnect* interconnect,
                                                  t_pb_graph_pin*** input_pb_graph_node_pin_ptrs,
                                                  const int num_input_sets,
                                                  const int* num_input_ptrs,
+                                                 const char* fout,
                                                  t_pb_graph_pin*** output_pb_graph_node_pin_ptrs,
                                                  const int num_output_sets,
                                                  const int* num_output_ptrs) {
@@ -1078,7 +1082,7 @@ static void alloc_and_load_partial_interc_edges(t_interconnect* interconnect,
         for (i_inpin = 0; i_inpin < num_input_ptrs[i_inset]; i_inpin++) {
             for (i_outset = 0; i_outset < num_output_sets; i_outset++) {
                 i_outpin = base_counter;
-                for (int i = 0; i < 7; i++) {
+                for (char i = 0; i < *fout; i++) {
                     if (i_outpin >= num_output_ptrs[i_outset]) {
                         i_outpin = i_outpin % num_output_ptrs[i_outset];
                     }
