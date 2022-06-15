@@ -1654,8 +1654,7 @@ static void ProcessInterconnect(vtr::string_internment* strings, pugi::xml_node 
             Prop = get_attribute(Cur, "name", loc_data).value();
             mode->interconnect[i].name = vtr::strdup(Prop);
 
-            Prop = get_attribute(Cur, "fout", loc_data, ReqOpt::OPTIONAL).value();
-            mode->interconnect[i].fout = vtr::strdup(Prop);
+            mode->interconnect[i].fout = get_attribute(Cur, "fout", loc_data, ReqOpt::OPTIONAL).as_int();
 
             mode->interconnect[i].meta = ProcessMetadata(strings, Cur, loc_data);
 
