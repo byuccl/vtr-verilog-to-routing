@@ -1042,7 +1042,7 @@ static void alloc_and_load_partial_interc_edges(t_interconnect* interconnect,
     }
 
 
-    edges = (t_pb_graph_edge*)vtr::calloc(out_count * 3, sizeof(t_pb_graph_edge));
+    edges = (t_pb_graph_edge*)vtr::calloc(in_count * fout, sizeof(t_pb_graph_edge));
     cur = (vtr::t_linked_vptr*)vtr::malloc(sizeof(vtr::t_linked_vptr));
     cur->next = edges_head;
     edges_head = cur;
