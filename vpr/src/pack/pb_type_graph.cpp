@@ -503,12 +503,13 @@ static void alloc_and_load_interconnect_pins(t_interconnect_pins* interc_pins,
         case PARTIAL_INTERC:
             if (!interconnect->interconnect_power->port_info_initialized) {
 
+                interconnect->interconnect_power->num_pins_per_port = 1;
+
                 num_ports = 0;
                 for (set_idx = 0; set_idx < num_input_sets; set_idx++) {
                     num_ports += num_input_pins[set_idx];
                 }
                 interconnect->interconnect_power->num_input_ports = num_ports;
-                // TODO: add num_output_ports and num_pins_per_port
 
                 num_ports = 0;
                 for (set_idx = 0; set_idx < num_output_sets; set_idx++) {
@@ -516,15 +517,12 @@ static void alloc_and_load_interconnect_pins(t_interconnect_pins* interc_pins,
                 }
                 interconnect->interconnect_power->num_output_ports = num_ports;
 
-                interconnect->interconnect_power->num_pins_per_port = 1;
-
                 interconnect->interconnect_power->port_info_initialized = true;
             }
 
             /* Input Pins */
             interc_pins->input_pins = (t_pb_graph_pin***)vtr::calloc
             (interconnect->interconnect_power->num_input_ports, sizeof(t_pb_graph_pin**));
-            // TODO: check if should be port_idx or pin_idx
             for (port_idx = 0; port_idx < interconnect->interconnect_power->num_input_ports;
             port_idx++) {
                 interc_pins->input_pins[port_idx] = (t_pb_graph_pin**)vtr::calloc
