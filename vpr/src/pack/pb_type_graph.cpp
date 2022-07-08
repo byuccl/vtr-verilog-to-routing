@@ -503,7 +503,6 @@ static void alloc_and_load_interconnect_pins(t_interconnect_pins* interc_pins,
         case PARTIAL_INTERC:
             if (!interconnect->interconnect_power->port_info_initialized) {
 
-                interconnect->interconnect_power->num_pins_per_port = 1;
 
                 num_ports = 0;
                 for (set_idx = 0; set_idx < num_input_sets; set_idx++) {
@@ -516,6 +515,8 @@ static void alloc_and_load_interconnect_pins(t_interconnect_pins* interc_pins,
                     num_ports += num_output_pins[set_idx];
                 }
                 interconnect->interconnect_power->num_output_ports = num_ports;
+
+                interconnect->interconnect_power->num_pins_per_port = 1;
 
                 interconnect->interconnect_power->port_info_initialized = true;
             }
@@ -1040,7 +1041,8 @@ static void alloc_and_load_partial_interc_edges(t_interconnect* interconnect,
     }
 
 
-    edges = (t_pb_graph_edge*)vtr::calloc(in_count * fout, sizeof(t_pb_graph_edge));
+    // edges = (t_pb_graph_edge*)vtr::calloc(in_count * fout, sizeof(t_pb_graph_edge));
+    edges = (t_pb_graph_edge*)vtr::calloc(in_count * out_count, sizeof(t_pb_graph_edge));
     cur = (vtr::t_linked_vptr*)vtr::malloc(sizeof(vtr::t_linked_vptr));
     cur->next = edges_head;
     edges_head = cur;
@@ -1048,7 +1050,8 @@ static void alloc_and_load_partial_interc_edges(t_interconnect* interconnect,
     cur = (vtr::t_linked_vptr*)vtr::malloc(sizeof(vtr::t_linked_vptr));
     cur->next = num_edges_head;
     num_edges_head = cur;
-    cur->data_vptr = (void*)((intptr_t)out_count * 3);
+    // cur->data_vptr = (void*)((intptr_t)in_count * fout);
+    cur->data_vptr = (void*)((intptr_t)in_count * out_count);
 
     for (i_inset = 0; i_inset < num_input_sets; i_inset++) {
         for (i_inpin = 0; i_inpin < num_input_ptrs[i_inset]; i_inpin++) {
@@ -1108,6 +1111,7 @@ static void alloc_and_load_partial_interc_edges(t_interconnect* interconnect,
         }
     }
     VTR_ASSERT(i_edge == (in_count * fout));
+    // VTR_ASSERT(i_edge == (in_count * out_count));
 }
 
 /**
