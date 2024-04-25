@@ -764,7 +764,7 @@ struct ParMYSPass : public Pass {
             if (hard_multipliers) {
                 /* Perform a splitting of the multipliers for hard block mults */
                 reduce_operations(odin_netlist, MULTIPLY);
-                iterate_multipliers(odin_netlist);
+                iterate_multipliers(odin_netlist); //!
                 clean_multipliers();
             }
 

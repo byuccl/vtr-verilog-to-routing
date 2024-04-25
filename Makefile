@@ -21,7 +21,7 @@
 #    release		#Build with compiler optimization
 #    debug			#Build with debug info and no compiler optimization
 #    strict			#Build VPR with warnings treated as errors
-BUILD_TYPE ?= release
+BUILD_TYPE ?= debug
 
 #Debugging verbosity enable
 VERBOSE ?= 0

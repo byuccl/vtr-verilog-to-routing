@@ -848,7 +848,7 @@ void init_split_multiplier(nnode_t *node, nnode_t *ptr, int offa, int a, int off
         if (node_a)
             add_input_pin_to_node(ptr, copy_input_npin(node_a->input_pins[i]), i);
         else
-            remap_pin_to_new_node(node->input_pins[i + offa], ptr, i);
+            remap_pin_to_new_node(node->input_pins[i + offa], ptr, i); // ! this is the point of failure for the other multiply
     }
 
     for (int i = 0; i < b; i++) {
@@ -927,6 +927,9 @@ void init_multiplier_adder(nnode_t *node, nnode_t *parent, int a, int b)
  * the resulting logic:
  *
  * ((a1 * b1) . (a0 * b0)) + ((a0 * b1) + (a1 * b0)) ==> Result
+ * 
+ * ! what they actually did:
+ *  ((a1 * b1) + (a0 * b1) + (a1 * b0)) . (a0 * b0)
  *
  * Note that for some of the additions we need to perform sign extensions,
  * but this should not be a problem since the sign extension is always
@@ -935,45 +938,61 @@ void init_multiplier_adder(nnode_t *node, nnode_t *parent, int a, int b)
  *-----------------------------------------------------------------------*/
 void split_multiplier(nnode_t *node, int a0, int b0, int a1, int b1, netlist_t *netlist)
 {
-    nnode_t *a0b0, *a0b1, *a1b0, *a1b1, *addsmall, *addbig;
+
+    // ! a1 and b1 are what we will have left to multiply after using one multiplication.
+
+
+    //! the equation is just FIFO!!!! a1a0 * b1b0 => a0 * b0 + a0 * b1 + a1 * b0 + a1 * b1 => c1c0 => c
+    nnode_t *a0b0, *a0b1, *a1b0, *a1b1, *addsmall, *addsmall2, *addbig;
     int size;
 
     /* Check for a legitimate split */
     oassert(node->input_port_sizes[0] == (a0 + a1));
     oassert(node->input_port_sizes[1] == (b0 + b1));
+    printf("node input one is %d and a0 + a1=%d\n", node->input_port_sizes[0], a0 + a1);
+    printf("node input two is %d and b0 + b1=%d\n", node->input_port_sizes[1], b0 + b1);
+    //! node input is the netlist node.
+
+    // find min of a0 and b0
+    // int min = a0 <= b0 ? a0 : b0;
+    int min = b0;
 
     /* New node for small multiply */
     a0b0 = allocate_nnode(node->loc);
     a0b0->name = (char *)vtr::malloc(strlen(node->name) + 3);
     strcpy(a0b0->name, node->name);
     strcat(a0b0->name, "-0");
-    init_split_multiplier(node, a0b0, 0, a0, 0, b0, nullptr, nullptr);
-    mult_list = insert_in_vptr_list(mult_list, a0b0);
+    init_split_multiplier(node, a0b0, 0, a0, 0, b0, nullptr, nullptr); //! fresh mult
+    mult_list = insert_in_vptr_list(mult_list, a0b0); //! this is where the recursive mulitplication happens
 
     /* New node for big multiply */
     a1b1 = allocate_nnode(node->loc);
     a1b1->name = (char *)vtr::malloc(strlen(node->name) + 3);
     strcpy(a1b1->name, node->name);
     strcat(a1b1->name, "-3");
-    init_split_multiplier(node, a1b1, a0, a1, b0, b1, nullptr, nullptr);
-    mult_list = insert_in_vptr_list(mult_list, a1b1);
+    init_split_multiplier(node, a1b1, a0, a1, b0, b1, nullptr, nullptr); //! a1 and b1 here are offset in their multiplication by a0 and b0 as they should be.
+    mult_list = insert_in_vptr_list(mult_list, a1b1); //! Fresh mult
 
     /* New node for 2nd multiply */
     a0b1 = allocate_nnode(node->loc);
     a0b1->name = (char *)vtr::malloc(strlen(node->name) + 3);
     strcpy(a0b1->name, node->name);
     strcat(a0b1->name, "-1");
-    init_split_multiplier(node, a0b1, 0, a0, b0, b1, a0b0, a1b1);
+    init_split_multiplier(node, a0b1, 0, a0, b0, b1, a0b0, a1b1); //! feed in mult of a0b0 and a1b1
     mult_list = insert_in_vptr_list(mult_list, a0b1);
-
+    // ! note that the a0b0 and a1b1 are also flipped
+// ??? A1B1 and A0B0 recieve the multiply outputs of the other two multiplies.
     /* New node for 3rd multiply */
     a1b0 = allocate_nnode(node->loc);
     a1b0->name = (char *)vtr::malloc(strlen(node->name) + 3);
     strcpy(a1b0->name, node->name);
     strcat(a1b0->name, "-2");
+    // init_split_multiplier(node, a1b0, a0, a1, 0, b0, a1b1, a0b0); // ! b has no offset here hence why it is used further down
     init_split_multiplier(node, a1b0, a0, a1, 0, b0, a1b1, a0b0);
     mult_list = insert_in_vptr_list(mult_list, a1b0);
 
+
+    ////////////////////////////////////////////////////////////////////
     /* New node for the initial add */
     addsmall = allocate_nnode(node->loc);
     addsmall->name = (char *)vtr::malloc(strlen(node->name) + 6);
@@ -981,43 +1000,111 @@ void split_multiplier(nnode_t *node, int a0, int b0, int a1, int b1, netlist_t *
     strcat(addsmall->name, "-add0");
     // this addition will have a carry out in the worst case, add to input pins and connect then to gnd
     init_multiplier_adder(addsmall, a1b0, a1b0->num_output_pins + 1, a0b1->num_output_pins + 1);
-
-    /* New node for the BIG add */
-    addbig = allocate_nnode(node->loc);
-    addbig->name = (char *)vtr::malloc(strlen(node->name) + 6);
-    strcpy(addbig->name, node->name);
-    strcat(addbig->name, "-add1");
-    init_multiplier_adder(addbig, addsmall, addsmall->num_output_pins, a0b0->num_output_pins - b0 + a1b1->num_output_pins);
+    printf(" a1b0->num_output_pins + 1 %d\n", a1b0->num_output_pins + 1);
+    printf(" a0b1->num_output_pins + 1 %d\n", a0b1->num_output_pins + 1);
 
     // connect inputs to port a of addsmall
     for (int i = 0; i < a1b0->num_output_pins; i++)
+        //! this version goes from out->in not the other way round
+        // ! so from a1b0->addsmall in this case
         connect_nodes(a1b0, i, addsmall, i);
+    // !! addsmall->input_port_sizes[0] is the a input
+    // !! addsmall->input_port_sizes[1] is the b input
     add_input_pin_to_node(addsmall, get_zero_pin(netlist), a1b0->num_output_pins);
     // connect inputs to port b of addsmall
     for (int i = 0; i < a0b1->num_output_pins; i++)
         connect_nodes(a0b1, i, addsmall, i + addsmall->input_port_sizes[0]);
     add_input_pin_to_node(addsmall, get_zero_pin(netlist), a0b1->num_output_pins + addsmall->input_port_sizes[0]);
 
-    // connect inputs to port a of addbig
-    size = addsmall->num_output_pins;
-    for (int i = 0; i < size; i++)
-        connect_nodes(addsmall, i, addbig, i);
+    // using the balenced addition method only works if a0 and b0 are the same size
+    if(false){
+        // TODO WHERE TO SPLIT
+        /* New node for the BIG add */
+        addbig = allocate_nnode(node->loc);
+        addbig->name = (char *)vtr::malloc(strlen(node->name) + 6);
+        strcpy(addbig->name, node->name);
+        strcat(addbig->name, "-add1");
+        init_multiplier_adder(addbig, addsmall, addsmall->num_output_pins, a0b0->num_output_pins - min + a1b1->num_output_pins);
+        printf("a0b0->num_output_pins - min + a1b1->num_output_pins %d\n", a0b0->num_output_pins - min + a1b1->num_output_pins);
 
-    // connect inputs to port b of addbig
-    for (int i = b0; i < a0b0->output_port_sizes[0]; i++)
-        connect_nodes(a0b0, i, addbig, i - b0 + size);
-    size = size + a0b0->output_port_sizes[0] - b0;
-    for (int i = 0; i < a1b1->output_port_sizes[0]; i++)
-        connect_nodes(a1b1, i, addbig, i + size);
+        // connect inputs to port a of addbig
+        size = addsmall->num_output_pins;
+        printf("addsmall is %d\n", size);
+        printf("-----------------Conection 1 -----------------\n");
+        for (int i = 0; i < size; i++) {
+            connect_nodes(addsmall, i, addbig, i);
+            printf("indx = %d\n", i);
+        }
 
-    // remap the multiplier outputs coming directly from a0b0
-    for (int i = 0; i < b0; i++) {
-        remap_pin_to_new_node(node->output_pins[i], a0b0, i);
-    }
+        // [0] = size of a
+        printf("a0b0->output_port_sizes[0] %d\n", a0b0->output_port_sizes[0]);
+        printf("-----------------Conection 2 -----------------\n");
+        for (int i = b0; i < a0b0->output_port_sizes[0]; i++) { //! this port sizes thing is likely the problem!!
+            connect_nodes(a0b0, i, addbig, i - b0 + size);
+            printf("indx = %d\n", i - b0 + size);
+        }
+        size = size + a0b0->output_port_sizes[0] - b0;
+        printf("a1b1->output_port_sizes[0] %d\n", a1b1->output_port_sizes[0]);
+        printf("-----------------Conection 3 -----------------\n");
+        for (int i = 0; i < a1b1->output_port_sizes[0]; i++) {
+            connect_nodes(a1b1, i, addbig, i + size);
+            printf("indx = %d\n", i + size);
+            // ! this for exedes addbig output pins but extends the size of addbig.
+        }
 
-    // remap the multiplier outputs coming from addbig
-    for (int i = 0; i < addbig->num_output_pins; i++) {
-        remap_pin_to_new_node(node->output_pins[i + b0], addbig, i);
+        // remap the multiplier outputs coming directly from a0b0
+
+        // ! THE PROBLEM HERE IS WE ASUME THAT B input has the smaller size than A! Check this at the begining!
+        printf("a0b0->num_output_pins %d\n", a0b0->num_output_pins);
+        for (int i = 0; i < min; i++) { /// !!!!!!!!!!!!!!!!!! HERE LIES THE ISSUE IT IS ASSUMED THAT HALF!!!! THIS IS WHERE THE ASSUMPTION IS MADE THAT a0 = b0. therfore half is either.
+            // ? set half of the outputs of the parent to this special hardwar adder we created
+            remap_pin_to_new_node(node->output_pins[i], a0b0, i); // ? <--- this is just the concatenation!!!! at this point a0b0 is the result of a0b0 added
+        } // TODO I think we are just trying to capture the first b0 bits of a0b0
+
+        // remap the multiplier outputs coming from addbig
+        // ! addbig num output pins is the minimumum of 
+        printf("node output pins %d\n", addbig->num_output_pins);
+        printf("node output pins %d\n", node->num_output_pins);
+        // ! addbig output pins size is the maximum of addsmall->num_output_pins and (a0b0->num_output_pins - b0 + a1b1->num_output_pins)
+        // ! addsmall output pins size is the max of a1b0->num_output_pins + 1 and a0b1->num_output_pins + 1
+        // ! a1b0 and a0b1 have a1/0+b0/1 outputs <--- this here is the number that MUST remain the same!
+        for (int i = 0; i < addbig->num_output_pins; i++) {
+            
+            remap_pin_to_new_node(node->output_pins[i + min], addbig, i); //!
+            printf("error in remap on i = %d\n", i);
+            
+        }
+        
+    } else {
+        addsmall2 = allocate_nnode(node->loc);
+        addsmall2->name = (char *)vtr::malloc(strlen(node->name) + 6);
+        strcpy(addsmall2->name, node->name);
+        strcat(addsmall2->name, "-add1");
+        init_multiplier_adder(addsmall2, a0b0, a0b0->num_output_pins + 1, a1b1->num_output_pins + 1);
+
+        for (int i = 0; i < a0b0->num_output_pins; i++)
+            connect_nodes(a0b0, i, addsmall2, i);
+        
+        add_input_pin_to_node(addsmall2, get_zero_pin(netlist), a0b0->num_output_pins);
+        for (int i = 0; i < a1b1->num_output_pins; i++)
+            connect_nodes(a1b1, i, addsmall2, i + addsmall2->input_port_sizes[0]);
+        add_input_pin_to_node(addsmall2, get_zero_pin(netlist), a1b1->num_output_pins + addsmall2->input_port_sizes[0]);
+
+        addbig = allocate_nnode(node->loc);
+        addbig->name = (char *)vtr::malloc(strlen(node->name) + 6);
+        strcpy(addbig->name, node->name);
+        strcat(addbig->name, "-add2");
+        init_multiplier_adder(addbig, addsmall, addsmall->num_output_pins, addsmall2->num_output_pins);
+
+        for (int i = 0; i < addsmall->num_output_pins; i++)
+            connect_nodes(addsmall, i, addbig, i);
+        
+        for (int i = 0; i < addsmall2->num_output_pins; i++)
+            connect_nodes(addsmall2, i, addbig, i + addbig->input_port_sizes[0]);
+
+        // remap the multiplier outputs coming directly from a0b0
+        for (int i = 0; i < addbig->num_output_pins; i++)
+            remap_pin_to_new_node(node->output_pins[i], addbig, i);
     }
 
     // CLEAN UP
@@ -1026,6 +1113,16 @@ void split_multiplier(nnode_t *node, int a0, int b0, int a1, int b1, netlist_t *
     return;
 }
 
+
+// ???? NOTES???????
+// ? the reason that the number of pins in the node is 64 is because 32+32 = 64 in the multiplication
+// ? 
+// ?
+// ? The problem falls when a0b0= an uneaven number (in our case its 43). What do we do there?
+// ?
+// ?
+// ? note that a0b0 output pins + a1b1 output pins = node output pins = 43 + 21 = 64
+// ?
 /*-------------------------------------------------------------------------
  * (function: split_multiplier_a)
  *
@@ -1286,10 +1383,14 @@ void iterate_multipliers(netlist_t *netlist)
 
     sizea = hard_multipliers->inputs->size;
     sizeb = hard_multipliers->inputs->next->size;
+    printf("hard multiplier is seen as having %d a inputs and %d b inputs\n", sizea, sizeb);
+    // ! at this point in the flow the correct number of A and B inputs are seen :)
+    // ! sizea = 18, sizeb = 25
     if (sizea < sizeb) {
         swap = sizea;
         sizea = sizeb;
         sizeb = swap;
+        //! this if statement is run!
     }
 
     while (mult_list != NULL) {
@@ -1305,27 +1406,39 @@ void iterate_multipliers(netlist_t *netlist)
 
         mula = node->input_port_sizes[0];
         mulb = node->input_port_sizes[1];
+        // printf("minimum hard multiplier size is %d\n", min_mult);
         int mult_size = std::max<int>(mula, mulb);
         if (mula < mulb) {
+            // ! this is run multiple times and is the reason for the swapping.
+            // ! technically this should garentie that we dont get funny results with b0?
             swap = sizea;
             sizea = sizeb;
             sizeb = swap;
         }
+        printf("----------------------spliting node %s--------------------\n", node->name);
+        printf("mula=%d inputs and mulb=%d inputs\n", mula, mulb);
+        printf("sizea= %d and sizeb= %d\n", sizea, sizeb);
 
-        /* Do I need to split the multiplier on both inputs? */
+        /* Do I need to split the multiplier on both inputs? */ //!!!!!! ANSWER IS YES
         if ((mula > sizea) && (mulb > sizeb)) {
             a0 = sizea;
             a1 = mula - sizea;
             b0 = sizeb;
             b1 = mulb - sizeb;
-            split_multiplier(node, a0, b0, a1, b1, netlist);
+            //! spliting sizes here are:
+            // ! a0 = 18, a1 = 14, b0 = 25, b1 = 7
+            printf("splitting multiplier into a0 = %d, a1 = %d, b0 = %d, b1 = %d\n", a0, a1, b0, b1);
+            printf("------------------------------------begining multiplier split ------------------------------------\n");
+            split_multiplier(node, a0, b0, a1, b1, netlist); //!
         } else if (mula > sizea) /* split multiplier on a input? */
         {
+            printf("splitting multiplier on a input\n");
             a0 = sizea;
             a1 = mula - sizea;
             split_multiplier_a(node, a0, a1, mulb);
         } else if (mulb > sizeb) /* split multiplier on b input? */
         {
+            printf("splitting multiplier on b input\n");
             b1 = sizeb;
             b0 = mulb - sizeb;
             split_multiplier_b(node, mula, b1, b0);
@@ -1335,6 +1448,7 @@ void iterate_multipliers(netlist_t *netlist)
         // TODO: implement multipliers where one of the operands is
         // 1 bit wide using soft logic
         else if (mult_size >= min_mult || mula == 1 || mulb == 1) {
+            printf("not spliting multiplier\n");
             /* Check to ensure IF mult needs to be exact size */
             if (configuration.fixed_hard_multiplier != 0)
                 pad_multiplier(node, netlist);
@@ -1346,6 +1460,7 @@ void iterate_multipliers(netlist_t *netlist)
                 record_mult_distribution(node);
             }
         } else if (hard_adders) {
+            printf("adder\n");
             if (configuration.fixed_hard_multiplier != 0) {
                 split_soft_multiplier(node, netlist);
             }
