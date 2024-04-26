@@ -1017,7 +1017,7 @@ void split_multiplier(nnode_t *node, int a0, int b0, int a1, int b1, netlist_t *
     add_input_pin_to_node(addsmall, get_zero_pin(netlist), a0b1->num_output_pins + addsmall->input_port_sizes[0]);
 
     // using the balenced addition method only works if a0 and b0 are the same size
-    if(false){
+    if(b0==a0){
         // TODO WHERE TO SPLIT
         /* New node for the BIG add */
         addbig = allocate_nnode(node->loc);
