@@ -55,8 +55,7 @@ void setup_vpr_floorplan_constraints_one_loc(VprConstraints& constraints, int ex
      * The subtile can also optionally be set in the PartitionRegion, based on the value passed in by the user.
      */
     for (auto blk_id : cluster_ctx.clb_nlist.blocks()) {
-        std::string part_name;
-        part_name = cluster_ctx.clb_nlist.block_name(blk_id);
+        const std::string& part_name = cluster_ctx.clb_nlist.block_name(blk_id);
         PartitionId partid(part_id);
 
         Partition part;
@@ -65,7 +64,7 @@ void setup_vpr_floorplan_constraints_one_loc(VprConstraints& constraints, int ex
         PartitionRegion pr;
         Region reg;
 
-        auto loc = place_ctx.block_locs[blk_id].loc;
+        const auto& loc = place_ctx.block_locs[blk_id].loc;
 
         reg.set_region_rect({loc.x - expand,
                              loc.y - expand,
@@ -79,12 +78,12 @@ void setup_vpr_floorplan_constraints_one_loc(VprConstraints& constraints, int ex
 
         pr.add_to_part_region(reg);
         part.set_part_region(pr);
-        constraints.add_partition(part);
+        constraints.mutable_place_constraints().add_partition(part);
 
         std::unordered_set<AtomBlockId>* atoms = cluster_to_atoms(blk_id);
 
         for (auto atom_id : *atoms) {
-            constraints.add_constrained_atom(atom_id, partid);
+            constraints.mutable_place_constraints().add_constrained_atom(atom_id, partid);
         }
         part_id++;
     }
@@ -196,24 +195,24 @@ void setup_vpr_floorplan_constraints_cutpoints(VprConstraints& constraints, int 
     }
 
     int num_partitions = 0;
-    for (auto region : region_atoms) {
+    for (const auto& region : region_atoms) {
         Partition part;
         PartitionId partid(num_partitions);
         std::string part_name = "Part" + std::to_string(num_partitions);
         const auto reg_coord = region.first.get_region_rect();
         create_partition(part, part_name,
                          {reg_coord.xmin, reg_coord.ymin, reg_coord.xmax, reg_coord.ymax, reg_coord.layer_num});
-        constraints.add_partition(part);
+        constraints.mutable_place_constraints().add_partition(part);
 
-        for (unsigned int k = 0; k < region.second.size(); k++) {
-            constraints.add_constrained_atom(region.second[k], partid);
+        for (auto blk_id : region.second) {
+            constraints.mutable_place_constraints().add_constrained_atom(blk_id, partid);
         }
 
         num_partitions++;
     }
 }
 
-void create_partition(Partition& part, std::string part_name, const RegionRectCoord& region_cord) {
+void create_partition(Partition& part, const std::string& part_name, const RegionRectCoord& region_cord) {
     part.set_name(part_name);
     PartitionRegion part_pr;
     Region part_region;

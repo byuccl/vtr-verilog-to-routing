@@ -32,6 +32,17 @@
 #include "noc_storage.h"
 #include "noc_traffic_flows.h"
 #include "noc_routing.h"
+#include "tatum/report/TimingPath.hpp"
+
+#ifndef NO_SERVER
+
+#include "gateio.h"
+#include "taskresolver.h"
+
+class SetupHoldTimingInfo;
+class PostClusterDelayCalculator;
+
+#endif /* NO_SERVER */
 
 /**
  * @brief A Context is collection of state relating to a particular part of VPR
@@ -225,14 +236,6 @@ struct DeviceContext : public Context {
     std::vector<std::unique_ptr<ClockConnection>> clock_connections;
 
     /**
-     * @brief rr_node idx that connects to the input of all clock network wires
-     *
-     * Useful for two stage clock routing
-     * XXX: currently only one place to source the clock networks so only storing
-     *      a single value
-     */
-    int virtual_clock_network_root_idx;
-    /**
      * @brief switch_fanin_remap is only used for printing out switch fanin stats
      *        (the -switch_stats option)
      *
@@ -352,6 +355,12 @@ struct ClusteringHelperContext : public Context {
     // A vector of unordered_sets of AtomBlockIds that are inside each clustered block [0 .. num_clustered_blocks-1]
     // unordered_set for faster insertion/deletion during the iterative improvement process of packing
     vtr::vector<ClusterBlockId, std::unordered_set<AtomBlockId>> atoms_lookup;
+
+    /** Stores the NoC group ID of each atom block. Atom blocks that belong
+     * to different NoC groups can't be clustered with each other into the
+     * same clustered block.*/
+    vtr::vector<AtomBlockId, NocGroupId> atom_noc_grp_id;
+
     ~ClusteringHelperContext() {
         delete[] primitives_list;
     }
@@ -476,6 +485,11 @@ struct RoutingContext : public Context {
     vtr::Cache<std::tuple<e_router_lookahead, std::string, std::vector<t_segment_inf>>,
                RouterLookahead>
         cached_router_lookahead_;
+
+    /**
+     * @brief User specified routing constraints
+     */
+    UserRouteConstraints constraints;
 };
 
 /**
@@ -493,7 +507,7 @@ struct FloorplanningContext : public Context {
      *
      * The constraints are input into vpr and do not change.
      */
-    VprConstraints constraints;
+    UserPlaceConstraints constraints;
 
     /**
      * @brief Constraints for each cluster
@@ -512,7 +526,7 @@ struct FloorplanningContext : public Context {
 /**
  * @brief State of the Network on Chip (NoC)
  *
- * This should only contain data structures related to descrbing the
+ * This should only contain data structures related to describing the
  * NoC within the device.
  */
 struct NocContext : public Context {
@@ -548,6 +562,77 @@ struct NocContext : public Context {
      */
     std::unique_ptr<NocRouting> noc_flows_router;
 };
+
+#ifndef NO_SERVER
+/**
+ * @brief State relating to server mode
+ *
+ * This should contain only data structures that
+ * related to server state.
+ */
+class ServerContext : public Context {
+  public:
+    const server::GateIO& gateIO() const { return gate_io_; }
+    server::GateIO& mutable_gateIO() { return gate_io_; }
+
+    const server::TaskResolver& task_resolver() const { return task_resolver_; }
+    server::TaskResolver& mutable_task_resolver() { return task_resolver_; }
+
+    void set_crit_paths(std::vector<tatum::TimingPath>&& crit_paths) { crit_paths_ = std::move(crit_paths); }
+    const std::vector<tatum::TimingPath>& crit_paths() const { return crit_paths_; }
+
+    void clear_crit_path_elements() { crit_path_element_indexes_.clear(); }
+    void set_crit_path_elements(const std::map<std::size_t, std::set<std::size_t>>& crit_path_element_indexes) { crit_path_element_indexes_ = crit_path_element_indexes; }
+    std::map<std::size_t, std::set<std::size_t>> crit_path_element_indexes() const { return crit_path_element_indexes_; }
+
+    void set_draw_crit_path_contour(bool draw_crit_path_contour) { draw_crit_path_contour_ = draw_crit_path_contour; }
+    bool draw_crit_path_contour() const { return draw_crit_path_contour_; }
+
+    void set_timing_info(const std::shared_ptr<SetupHoldTimingInfo>& timing_info) { timing_info_ = timing_info; }
+    const std::shared_ptr<SetupHoldTimingInfo>& timing_info() const { return timing_info_; }
+
+    void set_routing_delay_calc(const std::shared_ptr<PostClusterDelayCalculator>& routing_delay_calc) { routing_delay_calc_ = routing_delay_calc; }
+    const std::shared_ptr<PostClusterDelayCalculator>& routing_delay_calc() const { return routing_delay_calc_; }
+
+  private:
+    server::GateIO gate_io_;
+    server::TaskResolver task_resolver_;
+
+    /**
+     * @brief Stores the critical path items.
+     *
+     * This value is used when rendering the critical path by the selected index.
+     * Once calculated upon request, it provides the value for a specific critical path
+     * to be rendered upon user request.
+     */
+    std::vector<tatum::TimingPath> crit_paths_;
+
+    /**
+     * @brief Stores the selected critical path elements.
+     *
+     * This value is used to render the selected critical path elements upon client request.
+     * The std::map key plays role of path index, where the element indexes are stored as std::set.
+     */
+    std::map<std::size_t, std::set<std::size_t>> crit_path_element_indexes_;
+
+    /**
+     * @brief Stores the flag indicating whether to draw the critical path contour.
+     *
+     * If the flag is set to true, the non-selected critical path elements will be drawn as a contour, while selected elements will be drawn as usual.
+     */
+    bool draw_crit_path_contour_ = false;
+
+    /**
+     * @brief Reference to the SetupHoldTimingInfo calculated during the routing stage.
+     */
+    std::shared_ptr<SetupHoldTimingInfo> timing_info_;
+
+    /**
+     * @brief Reference to the PostClusterDelayCalculator calculated during the routing stage.
+     */
+    std::shared_ptr<PostClusterDelayCalculator> routing_delay_calc_;
+};
+#endif /* NO_SERVER */
 
 /**
  * @brief This object encapsulates VPR's state.
@@ -632,6 +717,11 @@ class VprContext : public Context {
     const PackingMultithreadingContext& packing_multithreading() const { return packing_multithreading_; }
     PackingMultithreadingContext& mutable_packing_multithreading() { return packing_multithreading_; }
 
+#ifndef NO_SERVER
+    const ServerContext& server() const { return server_; }
+    ServerContext& mutable_server() { return server_; }
+#endif /* NO_SERVER */
+
   private:
     DeviceContext device_;
 
@@ -647,6 +737,10 @@ class VprContext : public Context {
     RoutingContext routing_;
     FloorplanningContext constraints_;
     NocContext noc_;
+
+#ifndef NO_SERVER
+    ServerContext server_;
+#endif /* NO_SERVER */
 
     PackingMultithreadingContext packing_multithreading_;
 };
